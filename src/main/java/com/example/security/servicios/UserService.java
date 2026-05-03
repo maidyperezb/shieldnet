@@ -169,10 +169,6 @@ public class UserService {
         usuarioRepository.save(usuario);
     }
 
-    // ============================================================
-    // MÉTODOS DE ELIMINACIÓN
-    // ============================================================
-
     /**
      * Elimina un usuario por su ID
      */

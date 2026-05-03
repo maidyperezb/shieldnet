@@ -975,11 +975,6 @@
                     <span class="status-count" id="autorizadosCount">0</span>
                 </div>
                 <div class="device-status-item">
-                    <span class="status-indicator status-no-autorizado"></span>
-                    <span class="status-label">No Autorizados:</span>
-                    <span class="status-count" id="noAutorizadosCount">0</span>
-                </div>
-                <div class="device-status-item">
                     <span class="status-indicator status-desconocido"></span>
                     <span class="status-label">Desconocidos:</span>
                     <span class="status-count" id="desconocidosCount">0</span>
@@ -1307,11 +1302,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     <span class="status-count" id="autorizadosCount">0</span>
                 </div>
                 <div class="device-status-item">
-                    <span class="status-indicator status-no-autorizado"></span>
-                    <span class="status-label">No Autorizados:</span>
-                    <span class="status-count" id="noAutorizadosCount">0</span>
-                </div>
-                <div class="device-status-item">
                     <span class="status-indicator status-desconocido"></span>
                     <span class="status-label">Desconocidos:</span>
                     <span class="status-count" id="desconocidosCount">0</span>
@@ -1405,6 +1395,36 @@ function loadTrafficView() {
                 <div class="stat-value" id="otherSpeed">0.00 MB/s</div>
             </div>
         </div>
+
+<div class="traffic-card-full" style="margin-top: 25px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h3>📡 Ancho de Banda por Dispositivo</h3>
+        <span style="font-size: 13px; color: #666;">
+            <i class="fas fa-circle" style="color: #2ecc71; font-size: 10px;"></i> 
+            Actualización en tiempo real
+        </span>
+    </div>
+    <div style="overflow-x: auto;">
+        <table id="bandwidthByDeviceTable" style="margin-top: 0;">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Dirección IP</th>
+                    <th>Velocidad Actual</th>
+                    <th>Actividad</th>
+                </tr>
+            </thead>
+            <tbody id="bandwidthTableBody">
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #999;">
+                        Esperando datos de tráfico...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
     `;
     
     // Actualizar enlaces de navegación
@@ -1418,36 +1438,80 @@ function loadTrafficView() {
     }, 100);
 }
 
+function updateBandwidthTable(speedPerIp) {
+    const tbody = document.getElementById('bandwidthTableBody');
+    if (!tbody) return;
+
+    // Si no hay datos aún
+    if (!speedPerIp || Object.keys(speedPerIp).length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="4" style="text-align: center; color: #999;">
+                    Sin actividad detectada
+                </td>
+            </tr>`;
+        return;
+    }
+
+    // Ordenar por mayor consumo
+    const sorted = Object.entries(speedPerIp)
+        .sort((a, b) => b[1] - a[1]);
+
+    let html = '';
+    sorted.forEach(([ip, mbps], index) => {
+        // Barra de actividad visual (máximo visual = 10 MB/s)
+        const barWidth = Math.min((mbps / 10) * 100, 100).toFixed(1);
+        
+        // Color según consumo
+        let barColor = '#2ecc71';       // verde  < 2 MB/s
+        if (mbps >= 5) barColor = '#e74c3c';    // rojo   >= 5 MB/s
+        else if (mbps >= 2) barColor = '#f39c12'; // naranja >= 2 MB/s
+
+        // Resaltar IPs que consumen mucho
+        const rowStyle = mbps >= 5 
+            ? 'background-color: rgba(231, 76, 60, 0.04);' 
+            : '';
+
+        html += `
+            <tr style="${rowStyle}">
+                <td style="color: #999; font-size: 13px;">${index + 1}</td>
+                <td>
+                    <span style="font-family: monospace; font-weight: bold; color: #2c3e50;">
+                        ${ip}
+                    </span>
+                </td>
+                <td>
+                    <span style="font-size: 16px; font-weight: bold; color: ${barColor};">
+                        ${mbps.toFixed(3)} MB/s
+                    </span>
+                </td>
+                <td style="min-width: 150px;">
+                    <div style="background: #f0f0f0; border-radius: 10px; height: 10px; overflow: hidden;">
+                        <div style="
+                            width: ${barWidth}%; 
+                            height: 100%; 
+                            background: ${barColor}; 
+                            border-radius: 10px;
+                            transition: width 0.8s ease;
+                        "></div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = html;
+}
+
 // Función para cargar la vista de QoS
 function loadQoSView() {
     document.getElementById('mainContent').innerHTML = `
-        <h2>📊 Análisis de Calidad de Servicio (QoS)</h2>
+        <h2><i class="fas fa-heartbeat" style="color: #e74c3c; margin-right: 10px;"></i>Análisis de Calidad de Servicio (QoS)</h2>
         
-        <!-- Tarjeta de promedio MOS -->
-        <div class="stat-card" style="margin-bottom: 20px; border-left-color: #3498db;">
-            <h3>🏆 Promedio MOS Score (24 horas)</h3>
-            <div class="stat-value" id="averageMosScore">Cargando...</div>
-            <p style="font-size: 14px; color: #666; margin-top: 10px;">
-                MOS: Mean Opinion Score (1.0 = Malo, 5.0 = Excelente)
-            </p>
-        </div>
-
-        <!-- Botón para nueva medición -->
         <button onclick="openQoSModal()" class="btn btn-success" style="margin-bottom: 20px;">
             <i class="fas fa-plus-circle"></i> Nueva Medición QoS
         </button>
 
-        <!-- Métricas actuales -->
-        <div id="currentQoSMetrics" style="margin-bottom: 30px;">
-            <h3>📈 Última Medición</h3>
-            <div id="latestQoSData">
-                <p style="text-align: center; color: #999; padding: 40px;">
-                    No hay mediciones recientes. Haz clic en "Nueva Medición QoS" para comenzar.
-                </p>
-            </div>
-        </div>
-
-        <!-- Historial de mediciones CON PAGINACIÓN -->
         <div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h3>📋 Historial de Mediciones</h3>
@@ -1473,17 +1537,12 @@ function loadQoSView() {
                 </tbody>
             </table>
             
-            <!-- Paginación -->
             <div id="qosPaginationContainer" style="margin-top: 15px; text-align: center;"></div>
         </div>
     `;
     
-    // Actualizar navegación
     updateNavLinks('qosBtn');
-    
-    // Cargar datos iniciales
-    loadAverageMos();
-    loadLatestQoS();
+    currentQoSPage = 1;
     loadQoSHistory();
 }
 
@@ -1710,10 +1769,6 @@ function executeQoSMeasurement() {
             currentQoSPage = 1;
             loadQoSHistory();
         }
-        // Actualizar promedio
-        if (document.getElementById('averageMosScore')) {
-            loadAverageMos();
-        }
     })
     .catch(error => {
         qosOutput.innerHTML = `
@@ -1938,6 +1993,35 @@ fetch('/api/network/qos/comparison')
         console.log('Comparación QoS:', data);
      
     });
+
+function escanearRedManual() {
+    const btn = document.getElementById('btnEscanear');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Escaneando...';
+    }
+
+    fetch('/api/dispositivos/scanner/scan', { method: 'POST' })
+        .then(r => r.text())
+        .then(() => {
+            showTemporaryMessage('✓ Escaneo iniciado, espera unos segundos...');
+            // Esperar 5 segundos y recargar la tabla
+            setTimeout(() => {
+                loadDevicesFromDatabase();
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-search"></i> Escanear Red';
+                }
+            }, 5000);
+        })
+        .catch(err => {
+            console.error('Error al escanear:', err);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-search"></i> Escanear Red';
+            }
+        });
+}
 
 // Función para cargar la vista de VoIP
 function loadVoIPView() {
@@ -2860,13 +2944,11 @@ function updateDeviceStatCounts() {
     // Calcular estadísticas
     const totalDevices = dispositivosConectados.length;
     const autorizados = dispositivosConectados.filter(d => d.estadoAutorizacion === 'AUTORIZADO').length;
-    const noAutorizados = dispositivosConectados.filter(d => d.estadoAutorizacion === 'NO_AUTORIZADO').length;
     const desconocidos = dispositivosConectados.filter(d => d.estadoAutorizacion === 'DESCONOCIDO').length;
     
     // Actualizar contadores si los elementos existen
     const totalDevicesEl = document.getElementById('totalDevices');
     const autorizadosCountEl = document.getElementById('autorizadosCount');
-    const noAutorizadosCountEl = document.getElementById('noAutorizadosCount');
     const desconocidosCountEl = document.getElementById('desconocidosCount');
     
     if (totalDevicesEl) {
@@ -2876,10 +2958,6 @@ function updateDeviceStatCounts() {
     if (autorizadosCountEl) {
         autorizadosCountEl.textContent = autorizados;
         console.log('Autorizados actualizado:', autorizados); // Debug
-    }
-    if (noAutorizadosCountEl) {
-        noAutorizadosCountEl.textContent = noAutorizados;
-        console.log('No autorizados actualizado:', noAutorizados); // Debug
     }
     if (desconocidosCountEl) {
         desconocidosCountEl.textContent = desconocidos;
@@ -2940,44 +3018,188 @@ function loadDevicesFromDatabase() {
 function loadDispositivosView() {
     document.getElementById('mainContent').innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-            <h2><i class="fas fa-network-wired" style="color: #f39c12; margin-right: 10px;"></i>Dispositivos Detectados</h2>
-            <div class="filter-dropdown">
-                <label for="filtroEstado" style="margin-right: 10px;"></label>
-                <select id="filtroEstado" class="form-select" onchange="filtrarDispositivosPorEstado()">
-                    <option value="TODOS">Todos</option>
-                    <option value="AUTORIZADO">Autorizados</option>
-                    <option value="NO_AUTORIZADO">No Autorizados</option>
-                    <option value="DESCONOCIDO">Desconocidos</option>
-                </select>
+    <h2><i class="fas fa-network-wired" style="color: #f39c12; margin-right: 10px;"></i>Dispositivos Detectados</h2>
+    <div style="display: flex; gap: 10px; align-items: center;">
+        <button id="btnEscanear" onclick="escanearRedManual()" class="btn btn-success">
+            <i class="fas fa-search"></i> Escanear Red
+        </button>
+        <select id="filtroEstado" class="form-select" onchange="filtrarDispositivosPorEstado()">
+            <option value="TODOS">Todos</option>
+            <option value="AUTORIZADO">Autorizados</option>
+            <option value="DESCONOCIDO">Desconocidos</option>
+        </select>
+    </div>
+</div>
+
+        <!-- Panel de MACs autorizadas -->
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #e0e0e0;">
+            <h3 style="margin-bottom: 15px;"><i class="fas fa-shield-alt" style="color: #27ae60;"></i> MACs Autorizadas</h3>
+            
+            <!-- Formulario para agregar MAC -->
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                <input type="text" id="inputMac" placeholder="AA:BB:CC:DD:EE:FF" 
+                    style="padding: 10px; border: 1px solid #ddd; border-radius: 8px; width: 200px; font-size: 14px;">
+                <input type="text" id="inputDescripcion" placeholder="Descripción (opcional)" 
+                    style="padding: 10px; border: 1px solid #ddd; border-radius: 8px; flex: 1; font-size: 14px;">
+                <button onclick="agregarMacAutorizada()" class="btn btn-success">
+                    <i class="fas fa-plus"></i> Agregar
+                </button>
+            </div>
+
+            <!-- Lista de MACs autorizadas -->
+            <div id="listaMacsAutorizadas">
+                <p style="color: #999; text-align: center;">Cargando MACs autorizadas...</p>
             </div>
         </div>
-        
+
+        <!-- Tabla de dispositivos -->
         <table class="device-list">
             <thead>
                 <tr>
                     <th>IP</th>
+                    <th>MAC</th>
                     <th>Última Conexión</th>
                     <th>Estado</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
-            <tbody id="deviceTableBody">
-                <!-- Contenido de la tabla de dispositivos -->
-            </tbody>
+            <tbody id="deviceTableBody"></tbody>
         </table>
     `;
-    
-    // Actualizar enlaces de navegación
+
     updateNavLinks('dispositivosBtn');
-    
-    /// Si ya tenemos datos, mostrarlos inmediatamente
+
     if (dispositivosConectados.length > 0) {
         dispositivosFiltrados = [...dispositivosConectados];
         updateDeviceTable();
     }
-    
-    // Siempre refresca en segundo plano
+
     loadDevicesFromDatabase();
+    loadMacsAutorizadas();
+    connectArpScanner();
+}
+
+// Cargar MACs autorizadas
+function loadMacsAutorizadas() {
+    fetch('/api/macs')
+        .then(r => r.json())
+        .then(data => {
+            const container = document.getElementById('listaMacsAutorizadas');
+            if (!container) return;
+
+            if (data.length === 0) {
+                container.innerHTML = '<p style="color: #999; text-align: center;">No hay MACs autorizadas. Agrega una arriba.</p>';
+                return;
+            }
+
+            let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+            data.forEach(m => {
+                html += `
+                    <div style="display: flex; align-items: center; gap: 10px; background: white; 
+                                padding: 10px 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
+                        <span style="font-family: monospace; font-size: 15px; font-weight: bold; color: #2c3e50;">
+                            ${m.mac}
+                        </span>
+                        <span style="flex: 1; color: #666; font-size: 14px;">${m.descripcion || ''}</span>
+                        <span style="font-size: 12px; color: #999;">${new Date(m.fechaRegistro).toLocaleDateString()}</span>
+                        <button onclick="eliminarMacAutorizada(${m.id})" class="btn btn-danger" 
+                                style="padding: 5px 10px; font-size: 13px;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        })
+        .catch(err => console.error('Error cargando MACs:', err));
+}
+
+// Agregar MAC autorizada
+function agregarMacAutorizada() {
+    const mac = document.getElementById('inputMac').value.trim();
+    const descripcion = document.getElementById('inputDescripcion').value.trim();
+
+    if (!mac) {
+        alert('Por favor ingresa una MAC');
+        return;
+    }
+
+    fetch('/api/macs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mac, descripcion })
+    })
+    .then(r => {
+        if (!r.ok) return r.text().then(t => { throw new Error(t); });
+        return r.json();
+    })
+    .then(() => {
+        document.getElementById('inputMac').value = '';
+        document.getElementById('inputDescripcion').value = '';
+        loadMacsAutorizadas();
+        loadDevicesFromDatabase(); // Refrescar tabla de dispositivos
+        showTemporaryMessage('✓ MAC autorizada agregada');
+    })
+    .catch(err => alert('Error: ' + err.message));
+}
+
+// Eliminar MAC autorizada
+function eliminarMacAutorizada(id) {
+    if (!confirm('¿Eliminar esta MAC de la lista de autorizadas?')) return;
+
+    fetch(`/api/macs/${id}`, { method: 'DELETE' })
+        .then(() => {
+            loadMacsAutorizadas();
+            loadDevicesFromDatabase();
+            showTemporaryMessage('✓ MAC eliminada');
+        })
+        .catch(err => console.error('Error eliminando MAC:', err));
+}
+
+// Variable global arriba del todo junto a las demás variables globales
+let arpEventSource = null;
+
+// Reemplaza connectArpScanner por esta versión
+function connectArpScanner() {
+    // Cerrar conexión anterior si existe
+    if (arpEventSource) {
+        arpEventSource.close();
+        arpEventSource = null;
+    }
+
+    arpEventSource = new EventSource('/api/dispositivos/scanner/events');
+
+    arpEventSource.onmessage = function(event) {
+        const device = JSON.parse(event.data);
+
+        showTrafficAlert(
+            device.estadoAutorizacion === 'AUTORIZADO' ? 'success' : 'warning',
+            '🔌 Nuevo dispositivo detectado',
+            `IP: ${device.ip} — Estado: ${device.estadoAutorizacion}`
+        );
+
+        loadDevicesFromDatabase();
+    };
+
+    arpEventSource.onerror = function() {
+        arpEventSource.close();
+        arpEventSource = null;
+        setTimeout(connectArpScanner, 10000);
+    };
+}
+
+function updateNavLinks(activeId) {
+    document.querySelectorAll('.sidebar .nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+    document.getElementById(activeId).classList.add('active');
+
+    // Cerrar SSE del ARP scanner si salimos de la vista de dispositivos
+    if (activeId !== 'dispositivosBtn' && arpEventSource) {
+        arpEventSource.close();
+        arpEventSource = null;
+    }
 }
 
 // Función para filtrar dispositivos por estado
@@ -2998,31 +3220,21 @@ function filtrarDispositivosPorEstado() {
 // Actualizar tabla de dispositivos
 function updateDeviceTable() {
     let tableBody = document.getElementById('deviceTableBody');
-    if(!tableBody) return;
-    
+    if (!tableBody) return;
+
     let html = '';
-    for(let device of dispositivosFiltrados) {
+    for (let device of dispositivosFiltrados) {
         const fechaFormateada = new Date(device.ultimaConexion).toLocaleString();
-        
-        // Definir clase CSS según el estado
-        let estadoClass = '';
-        switch(device.estadoAutorizacion) {
-            case 'AUTORIZADO':
-                estadoClass = 'estado-autorizado';
-                break;
-            case 'NO_AUTORIZADO':
-                estadoClass = 'estado-no-autorizado';
-                break;
-            case 'DESCONOCIDO':
-                estadoClass = 'estado-desconocido';
-                break;
-        }
-        
+        const estadoClass = device.estadoAutorizacion === 'AUTORIZADO'
+            ? 'estado-autorizado' : 'estado-desconocido';
+        const estadoIcon = device.estadoAutorizacion === 'AUTORIZADO' ? '✅' : '❓';
+
         html += `
             <tr class="${estadoClass}">
                 <td>${device.ip}</td>
+                <td style="font-family: monospace;">${device.mac || 'N/A'}</td>
                 <td>${fechaFormateada}</td>
-                <td>${device.estadoAutorizacion}</td>
+                <td>${estadoIcon} ${device.estadoAutorizacion}</td>
                 <td>
                     <button class="btn btn-primary action-btn" onclick="pingDevice('${device.ip}')">
                         <i class="fas fa-podcast"></i>
@@ -3034,19 +3246,8 @@ function updateDeviceTable() {
             </tr>
         `;
     }
-    
-    tableBody.innerHTML = html;
-}
 
-// Actualizar navegación
-function updateNavLinks(activeId) {
-    // Quitar clase activa de todos los links
-    document.querySelectorAll('.sidebar .nav-link').forEach(link => {
-        link.classList.remove('active');
-    });
-    
-    // Añadir clase activa al link actual
-    document.getElementById(activeId).classList.add('active');
+    tableBody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;">No hay dispositivos</td></tr>';
 }
 
 // Evento para cargar dispositivos cuando se carga el DOM
@@ -3346,6 +3547,7 @@ function connectEventSource() {
             
             // Actualizar gráfico de protocolos
             updateProtocolChart(data.protocolStats);
+            updateBandwidthTable(data.speedPerIp);
             
         } catch (error) {
             console.error("Error parseando datos JSON:", error);

@@ -25,17 +25,21 @@ public class Dispositivo {
     @Column(nullable = false, unique = true)
     private String ip;
 
+    // Campo MAC nuevo
+    @Column(name = "mac", length = 17)
+    private String mac;
+
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "ultima_conexion")
     private Date ultimaConexion;
-    
+
     // Campo para almacenar el estado de autorización como un String en la BD
     @Column(name = "estado_autorizacion", length = 20)
     private String estadoAutorizacionStr;
-    
+
     // Propiedad transitoria para manejar el enum
     @Transient
-    private com.example.security.modelo.EstadoAutorizacion estadoAutorizacion;
+    private EstadoAutorizacion estadoAutorizacion;
 
     // Constructor vacío
     public Dispositivo() {
@@ -62,9 +66,16 @@ public class Dispositivo {
 
     public void setIp(String ip) {
         this.ip = ip;
-        this.calcularEstadoAutorizacion();
     }
-    
+
+    public String getMac() {
+        return mac;
+    }
+
+    public void setMac(String mac) {
+        this.mac = mac != null ? mac.toUpperCase().trim() : null;
+    }
+
     public Date getUltimaConexion() {
         return ultimaConexion;
     }
@@ -72,7 +83,7 @@ public class Dispositivo {
     public void setUltimaConexion(Date ultimaConexion) {
         this.ultimaConexion = ultimaConexion;
     }
-    
+
     public EstadoAutorizacion getEstadoAutorizacion() {
         if (estadoAutorizacion == null && estadoAutorizacionStr != null) {
             try {
@@ -83,17 +94,17 @@ public class Dispositivo {
         }
         return estadoAutorizacion != null ? estadoAutorizacion : EstadoAutorizacion.DESCONOCIDO;
     }
-    
+
     public void setEstadoAutorizacion(EstadoAutorizacion estadoAutorizacion) {
         this.estadoAutorizacion = estadoAutorizacion;
         this.estadoAutorizacionStr = estadoAutorizacion != null ? estadoAutorizacion.name() : null;
     }
-    
+
     // Getters y setters para el campo de base de datos
     public String getEstadoAutorizacionStr() {
         return estadoAutorizacionStr;
     }
-    
+
     public void setEstadoAutorizacionStr(String estadoAutorizacionStr) {
         this.estadoAutorizacionStr = estadoAutorizacionStr;
         if (estadoAutorizacionStr != null) {
@@ -104,53 +115,19 @@ public class Dispositivo {
             }
         }
     }
-    
+
+    /**
+     * Ya no clasifica por rango de IP.
+     * El estado lo determina ArpScannerService según la MAC.
+     * Solo establece DESCONOCIDO si no tiene estado aún.
+     */
     private void calcularEstadoAutorizacion() {
-        try {
-            if (ip == null || ip.isEmpty()) {
-                this.estadoAutorizacion = EstadoAutorizacion.DESCONOCIDO;
-                this.estadoAutorizacionStr = EstadoAutorizacion.DESCONOCIDO.name();
-                return;
-            }
-            
-            // Verificar si la IP está en el formato correcto
-            String[] parts = ip.split("\\.");
-            if (parts.length != 4) {
-                this.estadoAutorizacion = EstadoAutorizacion.DESCONOCIDO;
-                this.estadoAutorizacionStr = EstadoAutorizacion.DESCONOCIDO.name();
-                return;
-            }
-            
-            // Solo consideramos IPs en el rango 192.168.1.X
-            if (!parts[0].equals("192") || !parts[1].equals("168") || !parts[2].equals("1")) {
-                this.estadoAutorizacion = EstadoAutorizacion.DESCONOCIDO;
-                this.estadoAutorizacionStr = EstadoAutorizacion.DESCONOCIDO.name();
-                return;
-            }
-            
-            int lastOctet = Integer.parseInt(parts[3]);
-            
-            // Reglas de clasificación según los rangos solicitados
-            if (lastOctet >= 1 && lastOctet <= 3) {
-                this.estadoAutorizacion = EstadoAutorizacion.AUTORIZADO;
-                this.estadoAutorizacionStr = EstadoAutorizacion.AUTORIZADO.name();
-            } else if (lastOctet >= 4 && lastOctet <= 6) {
-                this.estadoAutorizacion = EstadoAutorizacion.NO_AUTORIZADO;
-                this.estadoAutorizacionStr = EstadoAutorizacion.NO_AUTORIZADO.name();
-            } else if (lastOctet >= 7 && lastOctet <= 10) {
-                this.estadoAutorizacion = EstadoAutorizacion.DESCONOCIDO;
-                this.estadoAutorizacionStr = EstadoAutorizacion.DESCONOCIDO.name();
-            } else {
-                this.estadoAutorizacion = EstadoAutorizacion.DESCONOCIDO;
-                this.estadoAutorizacionStr = EstadoAutorizacion.DESCONOCIDO.name();
-            }
-        } catch (Exception e) {
+        if (this.estadoAutorizacion == null && this.estadoAutorizacionStr == null) {
             this.estadoAutorizacion = EstadoAutorizacion.DESCONOCIDO;
             this.estadoAutorizacionStr = EstadoAutorizacion.DESCONOCIDO.name();
         }
     }
-    
-    // Añadir métodos para calcular automaticamente el estado antes de persistir o actualizar
+
     @PrePersist
     @PreUpdate
     public void prePersist() {

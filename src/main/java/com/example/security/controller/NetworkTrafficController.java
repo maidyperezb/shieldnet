@@ -213,4 +213,20 @@ public class NetworkTrafficController {
         
         return ResponseEntity.ok(status);
     }
+
+        /**
+     * Snapshot de velocidad actual por IP (sin SSE)
+     * Útil para tablas que se refresque con polling ligero
+     */
+    @GetMapping("/bandwidth-by-device")
+    public ResponseEntity<Map<String, Double>> getBandwidthByDevice() {
+        NetworkTrafficService.TrafficData data = service.getCurrentTrafficData();
+        // Ordenar por mayor consumo descendente
+        Map<String, Double> sorted = data.getSpeedPerIp().entrySet().stream()
+            .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+            .collect(java.util.LinkedHashMap::new,
+                    (m, e) -> m.put(e.getKey(), e.getValue()),
+                    java.util.LinkedHashMap::putAll);
+        return ResponseEntity.ok(sorted);
+    }
 }
