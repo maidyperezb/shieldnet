@@ -85,6 +85,27 @@
 			<artifactId>asterisk-java</artifactId>
 			<version>3.39.0</version>
 		</dependency>
+
+		<!-- Spring AI Framework for Chat Integration -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-core</artifactId>
+			<version>0.11.0</version>
+		</dependency>
+
+		<!-- Groq AI Provider for Spring AI -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-groq-spring-boot-starter</artifactId>
+			<version>0.11.0</version>
+		</dependency>
+
+		<!-- OpenAPI for Function Calling schema -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-core</artifactId>
+			<version>2.0.2</version>
+		</dependency>
 	</dependencies>
 
 	<build>
