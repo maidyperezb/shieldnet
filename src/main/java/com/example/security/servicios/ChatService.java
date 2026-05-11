@@ -39,7 +39,7 @@ public class ChatService {
      * Construye contexto, invoca AI, maneja tools, y persiste resultado.
      */
     public Flux<String> procesarPrompt(String query, Long usuarioId) {
-        return Flux.create(sink -> {
+        return Flux.defer(() -> {
             try {
                 // Obtener usuario
                 Usuario usuario = usuarioRepository.findById(usuarioId)
@@ -51,48 +51,28 @@ public class ChatService {
                 String context = contextBuilder.buildFullContext(usuario);
                 String systemPrompt = contextBuilder.buildSystemPrompt();
 
-                // 2. Construir el prompt completo
-                String fullPrompt = systemPrompt + "\n\n=== CONTEXTO ACTUAL ===\n" + context
-                        + "\n\n=== PREGUNTA DEL USUARIO ===\n" + query;
+                logger.info("Iniciando streaming real para usuario: {}", usuarioId);
 
-                logger.info("Procesando query para usuario: {}", usuarioId);
-                logger.debug("Prompt full (primeros 500 chars): {}",
-                        fullPrompt.length() > 500 ? fullPrompt.substring(0, 500) + "..." : fullPrompt);
-
-                // 3. Invocar ChatClient (streaming)
+                // 2. Invocar ChatClient (streaming real)
                 StringBuilder fullResponse = new StringBuilder();
 
-                try {
-                    // Crear prompt e invocar modelo
-                    var chatResponse = chatClient.prompt().system(systemPrompt).user(context + "\n\nPregunta: " + query)
-                            .call().content();
+                return chatClient.prompt()
+                        .system(systemPrompt)
+                        .user(context + "\n\nPregunta: " + query)
+                        .stream()
+                        .content()
+                        .doOnNext(fullResponse::append)
+                        .doOnComplete(() -> {
+                            // 3. Guardar conversación en BD al finalizar
+                            long responseTime = System.currentTimeMillis() - startTime;
+                            saveConversation(usuario, query, fullResponse.toString(), responseTime);
+                            logger.info("Streaming completado y conversación guardada para usuario: {}", usuarioId);
+                        })
+                        .doOnError(e -> logger.error("Error durante el streaming de ChatClient", e));
 
-                    // Emitir respuesta en chunks para simular streaming
-                    // (Spring AI 0.11.x: adaptación a API disponible)
-                    String[] chunks = splitIntoChunks(chatResponse, 50);
-                    for (String chunk : chunks) {
-                        sink.next(chunk);
-                        fullResponse.append(chunk);
-                    }
-
-                    // 4. Guardar conversación en BD
-                    long responseTime = System.currentTimeMillis() - startTime;
-                    saveConversation(usuario, query, fullResponse.toString(), responseTime);
-
-                    sink.complete();
-
-                }
-                catch (Exception e) {
-                    logger.error("Error al invocar ChatClient", e);
-                    String errorMsg = "Error al procesar tu pregunta: " + e.getMessage();
-                    sink.next(errorMsg);
-                    sink.complete();
-                }
-
-            }
-            catch (Exception e) {
-                logger.error("Error en procesarPrompt", e);
-                sink.error(e);
+            } catch (Exception e) {
+                logger.error("Error inicializando procesarPrompt", e);
+                return Flux.error(e);
             }
         });
     }

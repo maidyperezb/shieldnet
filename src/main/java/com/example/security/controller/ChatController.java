@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.http.codec.ServerSentEvent;
 import reactor.core.publisher.Flux;
 
 import java.io.IOException;
@@ -50,79 +51,48 @@ public class ChatController {
      * @param query          La pregunta/prompt del usuario
      * @param sessionId      ID de sesión (opcional)
      * @param authentication Usuario autenticado
-     * @return SseEmitter para streaming
+     * @return Flux de ServerSentEvent
      */
+    @Autowired
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
     @PostMapping(value = "/message", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter handleMessage(@RequestParam
-    String query, @RequestParam(required = false)
-    String sessionId, Authentication authentication) {
+    public Flux<ServerSentEvent<String>> handleMessage(@RequestParam String query, 
+                                                     @RequestParam(required = false) String sessionId, 
+                                                     Authentication authentication) {
 
         if (query == null || query.trim().isEmpty()) {
-            throw new IllegalArgumentException("El campo 'query' no puede estar vacío");
-        }
-
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new IllegalArgumentException("Usuario no autenticado");
+            return Flux.error(new IllegalArgumentException("El campo 'query' no puede estar vacío"));
         }
 
         Long usuarioId = getUserIdFromAuthentication(authentication);
+        logger.info("Iniciando Flux SSE para usuario: {}", usuarioId);
 
-        logger.info("Chat request from user: {}, query length: {}", usuarioId, query.length());
-
-        // Crear emitter con timeout de 5 minutos
-        SseEmitter emitter = new SseEmitter(300_000L);
-
-        // Procesar en hilo aparte para no bloquear
-        Executors.newSingleThreadExecutor().execute(() -> {
-            try {
-                // Obtener Flux de respuesta del servicio
-                Flux<String> responseFlux = chatService.procesarPrompt(query, usuarioId);
-
-                // Suscribirse y emitir eventos SSE
-                responseFlux.subscribe(chunk -> {
-                    try {
-                        // Emitir cada chunk como evento SSE
-                        emitter.send(SseEmitter.event().name("message").id(UUID.randomUUID().toString()).data(chunk)
-                                .build());
-                    }
-                    catch (IOException e) {
-                        logger.error("Error enviando chunk SSE", e);
-                    }
-                }, error -> {
-                    logger.error("Error en flux de respuesta", error);
-                    try {
-                        emitter.send(SseEmitter.event().name("error")
-                                .data("Error procesando solicitud: " + error.getMessage()).build());
-                        emitter.complete();
-                    }
-                    catch (IOException e) {
-                        logger.error("Error enviando evento de error", e);
-                    }
-                }, () -> {
-                    try {
-                        // Enviar evento de finalización
-                        emitter.send(SseEmitter.event().name("complete").data("Respuesta completada").build());
-                        emitter.complete();
-                        logger.info("Streaming completado para usuario: {}", usuarioId);
-                    }
-                    catch (IOException e) {
-                        logger.error("Error completando emitter", e);
-                    }
-                });
-
-            }
-            catch (Exception e) {
-                logger.error("Error en handleMessage", e);
+        return chatService.procesarPrompt(query, usuarioId)
+            .map(chunk -> {
                 try {
-                    emitter.send(SseEmitter.event().name("error").data("Error interno: " + e.getMessage()).build());
+                    String json = objectMapper.writeValueAsString(java.util.Map.of("type", "message", "content", chunk));
+                    return ServerSentEvent.<String>builder()
+                            .id(java.util.UUID.randomUUID().toString())
+                            .event("message")
+                            .data(json)
+                            .build();
+                } catch (Exception e) {
+                    logger.error("Error serializando chunk", e);
+                    return ServerSentEvent.<String>builder().event("error").data("{\"type\":\"error\",\"content\":\"Error de serialización\"}").build();
                 }
-                catch (IOException ex) {
-                    logger.error("Error enviando error final", ex);
-                }
-            }
-        });
-
-        return emitter;
+            })
+            .concatWith(Flux.just(ServerSentEvent.<String>builder()
+                    .event("complete")
+                    .data("{\"type\":\"complete\",\"content\":\"OK\"}")
+                    .build()))
+            .onErrorResume(e -> {
+                logger.error("Error en el stream de chat", e);
+                return Flux.just(ServerSentEvent.<String>builder()
+                        .event("error")
+                        .data("{\"type\":\"error\",\"content\":\"" + e.getMessage() + "\"}")
+                        .build());
+            });
     }
 
     /**

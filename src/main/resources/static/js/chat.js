@@ -92,39 +92,49 @@ class ChatWidget {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            // Procesar streaming SSE
+            // Procesar streaming SSE de forma robusta
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let fullResponse = '';
             let currentMessageId = this.addMessage('', 'assistant');
+            let buffer = '';
             
             while (true) {
                 const { done, value } = await reader.read();
                 
-                if (done) break;
+                if (done) {
+                    console.log('Stream finalizado por el servidor. Buffer restante:', buffer);
+                    // Procesar lo que quede en el buffer (importante si no termina en \n)
+                    if (buffer) {
+                        this.processSseChunk(buffer + '\n', (content) => {
+                            fullResponse += content;
+                            this.updateMessage(currentMessageId, fullResponse);
+                        });
+                    }
+                    break;
+                }
                 
-                const text = decoder.decode(value);
-                const lines = text.split('\n');
+                // Decodificar el chunk y añadirlo al buffer
+                const chunk = decoder.decode(value, { stream: true });
+                console.log('%c[SSE] Chunk recibido:', 'color: #00ff00', chunk);
+                buffer += chunk;
+                
+                // Procesar todas las líneas completas en el buffer
+                let lines = buffer.split('\n');
+                buffer = lines.pop(); 
                 
                 for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const eventData = JSON.parse(line.substring(6));
-                            
-                            if (eventData.type === 'message') {
-                                fullResponse += eventData.content;
-                                this.updateMessage(currentMessageId, fullResponse);
-                            } else if (eventData.type === 'error') {
-                                this.addMessage(`⚠️ Error: ${eventData.content}`, 'system');
-                            }
-                        } catch (e) {
-                            console.error('Error parsing SSE', e);
-                        }
-                    }
+                    console.log('%c[SSE] Procesando línea:', 'color: #00ccff', line);
+                    this.processSseChunk(line, (content) => {
+                        fullResponse += content;
+                        console.debug('[SSE] Respuesta acumulada:', fullResponse);
+                        this.updateMessage(currentMessageId, fullResponse);
+                    });
                 }
             }
             
             this.setStatus('Completado');
+            console.log('Respuesta final acumulada:', fullResponse);
             
         } catch (error) {
             console.error('Error enviando mensaje:', error);
@@ -171,6 +181,46 @@ class ChatWidget {
         } catch (error) {
             console.error('Error limpiando historial:', error);
             this.setStatus('Error limpiando historial');
+        }
+    }
+
+    processSseChunk(line, onMessage) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) return;
+        
+        // Ignorar líneas de control puro de SSE que no tienen data
+        if (trimmedLine.startsWith('event:') || trimmedLine.startsWith('id:') || trimmedLine.startsWith(':')) {
+            console.debug('[SSE] Ignorando línea de control:', trimmedLine);
+            return;
+        }
+
+        let dataStr = null;
+        if (trimmedLine.startsWith('data:')) {
+            // Extraer lo que haya después del primer ':'
+            dataStr = trimmedLine.substring(trimmedLine.indexOf(':') + 1).trim();
+        } else if (trimmedLine.includes('{') && trimmedLine.includes('}')) {
+            // Si la línea contiene JSON pero no tiene prefijo (mecanismo de respaldo)
+            const start = trimmedLine.indexOf('{');
+            const end = trimmedLine.lastIndexOf('}');
+            dataStr = trimmedLine.substring(start, end + 1);
+        }
+        
+        if (!dataStr) {
+            console.debug('[SSE] No se encontró contenido en la línea:', trimmedLine);
+            return;
+        }
+
+        try {
+            const eventData = JSON.parse(dataStr);
+            if (eventData.type === 'message') {
+                onMessage(eventData.content);
+            } else if (eventData.type === 'error') {
+                this.addMessage(`⚠️ Error: ${eventData.content}`, 'system');
+            } else if (eventData.type === 'complete') {
+                console.log('[SSE] Evento COMPLETE recibido');
+            }
+        } catch (e) {
+            console.warn('[SSE] Error parseando JSON:', dataStr, e);
         }
     }
 
