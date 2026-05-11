@@ -122,17 +122,11 @@
 			<version>${spring-ai.version}</version>
 		</dependency>
 
-		<!-- OpenAI as LLM provider (compatible with Groq API) -->
+		<!-- OpenAI provider with Groq API compatibility -->
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-openai-spring-boot-starter</artifactId>
 			<version>${spring-ai.version}</version>
-			<exclusions>
-				<exclusion>
-					<groupId>com.fasterxml.jackson.core</groupId>
-					<artifactId>jackson-databind</artifactId>
-				</exclusion>
-			</exclusions>
 		</dependency>
 
 		<!-- Jackson explicitly configured -->
