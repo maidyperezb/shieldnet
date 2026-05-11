@@ -153,8 +153,9 @@ class ChatWidget {
             // Limpiar mensajes previos
             this.messagesContainer.innerHTML = '';
             
-            // Cargar historial
-            conversaciones.slice(-10).forEach(conv => {
+            // Las conversaciones vienen DESC (más reciente primero), las invertimos para el chat
+            // y tomamos las últimas 20 para no saturar
+            conversaciones.slice(0, 20).reverse().forEach(conv => {
                 this.addMessage(conv.prompt, 'user');
                 this.addMessage(conv.respuesta, 'assistant');
             });
@@ -228,12 +229,15 @@ class ChatWidget {
         const messageEl = document.createElement('div');
         messageEl.className = `chat-message ${role}`;
         messageEl.textContent = content;
-        messageEl.id = `msg-${Date.now()}`;
+        
+        // Usar un ID más robusto para evitar colisiones en ráfagas rápidas
+        const uniqueId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        messageEl.id = uniqueId;
         
         this.messagesContainer.appendChild(messageEl);
         this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
         
-        return messageEl.id;
+        return uniqueId;
     }
 
     updateMessage(messageId, content) {
