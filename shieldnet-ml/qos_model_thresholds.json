@@ -1,0 +1,45 @@
+{
+  "model_type": "RandomForestClassifier",
+  "version": "2.0",
+  "prediction_target": "estado_futuro_del_host",
+  "labels": [
+    "ESTABLE",
+    "EN RIESGO",
+    "DEGRADANDO",
+    "CRITICO"
+  ],
+  "label_descriptions": {
+    "ESTABLE": "La conexión seguirá siendo buena en la próxima medición",
+    "EN RIESGO": "La calidad está bajando, podría empeorar pronto",
+    "DEGRADANDO": "Tendencia clara de deterioro, revisar la red",
+    "CRITICO": "Degradación severa inminente, intervención recomendada"
+  },
+  "features": [
+    "mos_actual",
+    "mos_anterior",
+    "delta_mos",
+    "jitter_actual",
+    "delta_jitter",
+    "latency_actual",
+    "delta_latency",
+    "packet_loss"
+  ],
+  "accuracy": 0.9708,
+  "trained_on": 852,
+  "thresholds": {
+    "ESTABLE": {
+      "mos_futuro_min": 4.0
+    },
+    "EN RIESGO": {
+      "mos_futuro_min": 3.6,
+      "mos_futuro_max": 4.0
+    },
+    "DEGRADANDO": {
+      "mos_futuro_min": 3.0,
+      "mos_futuro_max": 3.6
+    },
+    "CRITICO": {
+      "mos_futuro_max": 3.0
+    }
+  }
+}
