@@ -228,7 +228,16 @@ class ChatWidget {
     addMessage(content, role) {
         const messageEl = document.createElement('div');
         messageEl.className = `chat-message ${role}`;
-        messageEl.textContent = content;
+        
+        // Renderizar markdown para mensajes del asistente
+        if (role === 'assistant') {
+            const htmlContent = marked.parse(content);
+            const cleanHtml = DOMPurify.sanitize(htmlContent);
+            messageEl.innerHTML = cleanHtml;
+        } else {
+            // Para mensajes de usuario y sistema, usar textContent
+            messageEl.textContent = content;
+        }
         
         // Usar un ID más robusto para evitar colisiones en ráfagas rápidas
         const uniqueId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -243,7 +252,14 @@ class ChatWidget {
     updateMessage(messageId, content) {
         const messageEl = document.getElementById(messageId);
         if (messageEl) {
-            messageEl.textContent = content;
+            // Renderizar markdown para mensajes del asistente
+            if (messageEl.classList.contains('assistant')) {
+                const htmlContent = marked.parse(content);
+                const cleanHtml = DOMPurify.sanitize(htmlContent);
+                messageEl.innerHTML = cleanHtml;
+            } else {
+                messageEl.textContent = content;
+            }
             this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
         }
     }

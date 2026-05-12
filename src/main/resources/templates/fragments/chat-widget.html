@@ -31,6 +31,10 @@
         <div id="chat-status" class="chat-status"></div>
     </div>
 
+    <!-- Scripts para markdown -->
+    <script src="/js/marked.min.js"></script>
+    <script src="/js/purify.min.js"></script>
+
     <!-- Estilos del Widget -->
     <style>
         .chat-widget {
@@ -148,6 +152,93 @@
             color: #333;
             margin-right: auto;
             max-width: 85%;
+            overflow-x: auto;
+        }
+
+        /* Estilos para Markdown */
+        .chat-message.assistant h1,
+        .chat-message.assistant h2,
+        .chat-message.assistant h3,
+        .chat-message.assistant h4,
+        .chat-message.assistant h5,
+        .chat-message.assistant h6 {
+            margin-top: 8px;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .chat-message.assistant h1 { font-size: 18px; }
+        .chat-message.assistant h2 { font-size: 16px; }
+        .chat-message.assistant h3 { font-size: 15px; }
+        .chat-message.assistant h4 { font-size: 14px; }
+
+        .chat-message.assistant code {
+            background-color: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .chat-message.assistant pre {
+            background-color: #2d2d2d;
+            color: #f8f8f2;
+            padding: 10px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 8px 0;
+            font-size: 12px;
+        }
+
+        .chat-message.assistant pre code {
+            background-color: transparent;
+            padding: 0;
+            color: #f8f8f2;
+        }
+
+        .chat-message.assistant ul,
+        .chat-message.assistant ol {
+            margin: 6px 0;
+            padding-left: 20px;
+        }
+
+        .chat-message.assistant li {
+            margin-bottom: 4px;
+        }
+
+        .chat-message.assistant blockquote {
+            border-left: 4px solid #007bff;
+            padding-left: 12px;
+            margin: 6px 0;
+            opacity: 0.8;
+        }
+
+        .chat-message.assistant table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 8px 0;
+            font-size: 13px;
+        }
+
+        .chat-message.assistant table th,
+        .chat-message.assistant table td {
+            border: 1px solid #ccc;
+            padding: 6px 10px;
+            text-align: left;
+        }
+
+        .chat-message.assistant table th {
+            background-color: #d9e6f1;
+            font-weight: 600;
+        }
+
+        .chat-message.assistant a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        .chat-message.assistant a:hover {
+            text-decoration: underline;
         }
 
         .chat-message.system {
