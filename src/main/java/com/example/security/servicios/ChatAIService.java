@@ -17,6 +17,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Description;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -50,6 +51,8 @@ public class ChatAIService {
     // ============================================================================
     public Function<EventHistoryRequest, String> queryEventHistory() {
         return request -> {
+            logger.info("[HERRAMIENTA] queryEventHistory ejecutada - startDate: {}, endDate: {}",
+                    request.getStartDate(), request.getEndDate());
             try {
                 LocalDateTime startDate = request.getStartDate() != null ? request.getStartDate()
                         : LocalDateTime.now().minusDays(7);
@@ -68,7 +71,9 @@ public class ChatAIService {
                     eventos = eventos.subList(0, maxResults);
                 }
 
-                return formatEventosAsString(eventos);
+                String result = formatEventosAsString(eventos);
+                logger.info("queryEventHistory retornó {} eventos", eventos.size());
+                return result;
             }
             catch (Exception e) {
                 logger.error("Error en queryEventHistory", e);
@@ -82,6 +87,8 @@ public class ChatAIService {
     // ============================================================================
     public Function<QoSMetricsRequest, String> queryQoSMetrics() {
         return request -> {
+            logger.info("[HERRAMIENTA] queryQoSMetrics ejecutada - days: {}, protocol: {}", request.getDays(),
+                    request.getProtocolType());
             try {
                 int days = request.getDays() != null ? request.getDays() : 7;
                 LocalDateTime since = LocalDateTime.now().minusDays(days);
@@ -94,7 +101,9 @@ public class ChatAIService {
                             .filter(m -> request.getProtocolType().equalsIgnoreCase(m.getProtocolType())).toList();
                 }
 
-                return formatQoSAsString(metrics);
+                String result = formatQoSAsString(metrics);
+                logger.info("queryQoSMetrics retornó {} métricas", metrics.size());
+                return result;
             }
             catch (Exception e) {
                 logger.error("Error en queryQoSMetrics", e);
@@ -108,6 +117,7 @@ public class ChatAIService {
     // ============================================================================
     public Function<Void, String> listAuthorizedDevices() {
         return unused -> {
+            logger.info("[HERRAMIENTA] listAuthorizedDevices ejecutada");
             try {
                 List<Dispositivo> allDevices = dispositivoRepository.findAll();
                 List<Dispositivo> authorized = allDevices.stream()
@@ -115,7 +125,10 @@ public class ChatAIService {
                 List<Dispositivo> unauthorized = allDevices.stream()
                         .filter(d -> d.getEstadoAutorizacion() == EstadoAutorizacion.NO_AUTORIZADO).toList();
 
-                return formatDevicesAsString(authorized, unauthorized);
+                String result = formatDevicesAsString(authorized, unauthorized);
+                logger.info("listAuthorizedDevices retornó {} autorizados y {} no autorizados", authorized.size(),
+                        unauthorized.size());
+                return result;
             }
             catch (Exception e) {
                 logger.error("Error en listAuthorizedDevices", e);
@@ -145,7 +158,8 @@ public class ChatAIService {
                             d.getIp(), d.getMac(), d.getEstadoAutorizacion())));
                 }
 
-                logger.info("NetworkScan Tool invocado: type={}, subnet={}", type, subnet);
+                logger.info("[HERRAMIENTA] executeNetworkScan ejecutada - type: {}, subnet: {}", type, subnet);
+                logger.info("executeNetworkScan encontró {} dispositivos", allDevices.size());
                 return result.toString();
             }
             catch (Exception e) {
@@ -160,9 +174,12 @@ public class ChatAIService {
     // ============================================================================
     public Function<ReportRequest, String> generateMonitoringReport() {
         return request -> {
+            logger.info("[HERRAMIENTA] generateMonitoringReport ejecutada - days: {}", request.getDays());
             try {
                 int days = request.getDays() != null ? request.getDays() : 7;
-                return generateReport(days);
+                String result = generateReport(days);
+                logger.info("generateMonitoringReport completado");
+                return result;
             }
             catch (Exception e) {
                 logger.error("Error en generateMonitoringReport", e);
@@ -180,7 +197,40 @@ public class ChatAIService {
      */
     @Bean
     public ChatClient getChatClient() {
-        return ChatClient.builder(chatModel).build();
+        return ChatClient.builder(chatModel).defaultFunctions("queryEventHistory", "queryQoSMetrics",
+                "listAuthorizedDevices", "executeNetworkScan", "generateMonitoringReport").build();
+    }
+
+    // Registrar cada función como @Bean para que Spring las reconozca
+
+    @Bean(name = "queryEventHistory")
+    @Description("Consulta el historial de eventos de seguridad de la red en un rango de fechas especificado. Retorna lista de eventos con IP, descripción y usuario asociado.")
+    public Function<EventHistoryRequest, String> queryEventHistoryBean() {
+        return queryEventHistory();
+    }
+
+    @Bean(name = "queryQoSMetrics")
+    @Description("Consulta las métricas de Calidad de Servicio (QoS) de la red como latencia, jitter, pérdida de paquetes y puntuación MOS. Útil para diagnosticar problemas de rendimiento de red.")
+    public Function<QoSMetricsRequest, String> queryQoSMetricsBean() {
+        return queryQoSMetrics();
+    }
+
+    @Bean(name = "listAuthorizedDevices")
+    @Description("Lista todos los dispositivos autorizados y no autorizados en la red. Útil para detectar dispositivos desconocidos o no autorizados.")
+    public Function<Void, String> listAuthorizedDevicesBean() {
+        return listAuthorizedDevices();
+    }
+
+    @Bean(name = "executeNetworkScan")
+    @Description("Ejecuta un escaneo de red para descubrir dispositivos activos y obtener sus direcciones IP y MAC. Útil para mapear la topología de red y detectar intrusos.")
+    public Function<NetworkScanRequest, String> executeNetworkScanBean() {
+        return executeNetworkScan();
+    }
+
+    @Bean(name = "generateMonitoringReport")
+    @Description("Genera un reporte completo de monitoreo incluyendo eventos de seguridad, métricas QoS y estado de dispositivos autorizados. Proporciona vista integral de la salud de la red.")
+    public Function<ReportRequest, String> generateMonitoringReportBean() {
+        return generateMonitoringReport();
     }
 
     /**

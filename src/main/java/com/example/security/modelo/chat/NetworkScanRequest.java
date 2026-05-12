@@ -1,13 +1,20 @@
 package com.example.security.modelo.chat;
 
+import com.fasterxml.jackson.annotation.JsonClassDescription;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
 /**
  * Solicitud de herramienta para ejecutar escaneo de red.
  * Utilizada por Spring AI Function Calling.
  */
+@JsonClassDescription("Ejecuta un escaneo de red para descubrir dispositivos y sus direcciones IP/MAC")
 public class NetworkScanRequest {
     
-    private String type; // "arp" o "port"
-    private String subnet; // Ej: "192.168.1.0/24"
+    @JsonPropertyDescription("Tipo de escaneo: 'arp' para descubrir dispositivos o 'port' para escanear puertos")
+    private String type;
+    
+    @JsonPropertyDescription("Subred a escanear en formato CIDR (Ej: 192.168.1.0/24)")
+    private String subnet;
     
     public NetworkScanRequest() {}
     
