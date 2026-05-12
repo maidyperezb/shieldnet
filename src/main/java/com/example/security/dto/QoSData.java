@@ -18,10 +18,12 @@ public class QoSData {
     private Boolean duringActiveCall = false;
     private String targetIp;
 
+    // Predicción del modelo ML
+    private String predictedStatus;
+
     public QoSData() {
     }
-    
-    
+
     public QoSData(double latencyMs, double jitterMs, double packetLossPercent, double mosScore) {
         this.latencyMs = latencyMs;
         this.jitterMs = jitterMs;
@@ -29,13 +31,13 @@ public class QoSData {
         this.mosScore = mosScore;
         this.qualityStatus = calculateQualityStatus();
     }
-    
+
     private String calculateQualityStatus() {
-        if (mosScore >= 4.3) return "EXCELLENT";
-        if (mosScore >= 4.0) return "GOOD";
-        if (mosScore >= 3.6) return "FAIR";
-        if (mosScore >= 3.1) return "POOR";
-        return "BAD";
+        if (mosScore >= 4.3) return "EXCELENTE";
+        if (mosScore >= 4.0) return "BUENO";
+        if (mosScore >= 3.6) return "ACEPTABLE";
+        if (mosScore >= 3.1) return "MALO";
+        return "MUY MALO";
     }
 
     // Getters y Setters
@@ -128,8 +130,7 @@ public class QoSData {
         this.rttMaxMs = rttMaxMs;
     }
 
-
-        public Boolean getDuringActiveCall() {
+    public Boolean getDuringActiveCall() {
         return duringActiveCall;
     }
 
@@ -145,9 +146,17 @@ public class QoSData {
         this.targetIp = targetIp;
     }
 
+    public String getPredictedStatus() {
+        return predictedStatus;
+    }
+
+    public void setPredictedStatus(String predictedStatus) {
+        this.predictedStatus = predictedStatus;
+    }
+
     @Override
     public String toString() {
-        return String.format("QoS[Latency=%.2fms, Jitter=%.2fms, Loss=%.2f%%, MOS=%.2f, Status=%s]",
-                latencyMs, jitterMs, packetLossPercent, mosScore, qualityStatus);
+        return String.format("QoS[Latency=%.2fms, Jitter=%.2fms, Loss=%.2f%%, MOS=%.2f, Status=%s, Predicted=%s]",
+                latencyMs, jitterMs, packetLossPercent, mosScore, qualityStatus, predictedStatus);
     }
 }

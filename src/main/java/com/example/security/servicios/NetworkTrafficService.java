@@ -9,7 +9,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.pcap4j.packet.IpV4Packet;
 import org.pcap4j.packet.IpV6Packet;
-import java.util.HashMap;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -47,7 +46,7 @@ public class NetworkTrafficService {
     private final AtomicLong totalBytes = new AtomicLong(0);
     private final AtomicBoolean isCapturing = new AtomicBoolean(false);
     private final List<PcapHandle> activeHandles = new CopyOnWriteArrayList<>();
-    
+
     private Thread captureThread;
 
     // Velocidad general
@@ -71,14 +70,8 @@ public class NetworkTrafficService {
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /**
-     * Mapa de conexiones TCP activas.
-     * Clave: "srcIp:srcPort-dstIp:dstPort"
-     * Valor: tipo de protocolo detectado ("streaming", "http", "voip", "other")
-     */
     private final Map<String, String> connectionTypeMap = new ConcurrentHashMap<>();
 
-    // Limpiar conexiones antiguas cada N paquetes
     private final AtomicLong packetCounter = new AtomicLong(0);
     private static final long CLEANUP_INTERVAL = 10000;
     private static final int MAX_CONNECTIONS = 50000;
@@ -101,18 +94,52 @@ public class NetworkTrafficService {
                         System.out.println(i + ": " + nif.getName() + " - " + nif.getDescription());
                     }
 
-                    // Capturar de Wi-Fi (índice 4) y Loopback (índice 7)
-                    List<Integer> interfacesToCapture = List.of(4, 7);
+                    // Seleccionar por descripción, no por índice fijo
+                    List<PcapNetworkInterface> selectedInterfaces = interfaces.stream()
+                        .filter(nif -> {
+                            String desc = nif.getDescription() != null
+                                          ? nif.getDescription().toLowerCase() : "";
+                            String name = nif.getName().toLowerCase();
 
-                    for (Integer index : interfacesToCapture) {
-                        PcapNetworkInterface nif = interfaces.get(index);
+                            boolean isRealWifi     = desc.contains("realtek") && desc.contains("802.11");
+                            boolean isRealEthernet = desc.contains("realtek") && desc.contains("gbe");
+                            boolean isLoopback     = name.contains("loopback") || desc.contains("loopback");
+
+                            boolean isVirtual = desc.contains("virtual")
+                                             || desc.contains("hyper-v")
+                                             || desc.contains("wi-fi direct")
+                                             || desc.contains("vpn")
+                                             || desc.contains("miniport");
+
+                            return (isRealWifi || isRealEthernet || isLoopback) && !isVirtual;
+                        })
+                        .collect(java.util.stream.Collectors.toList());
+
+                    // Fallback: si no encontró nada, usar las primeras interfaces con IPs
+                    if (selectedInterfaces.isEmpty()) {
+                        logger.warn("No se encontraron interfaces reales, usando fallback");
+                        selectedInterfaces = interfaces.stream()
+                            .filter(nif -> nif.getAddresses() != null
+                                        && !nif.getAddresses().isEmpty())
+                            .limit(2)
+                            .collect(java.util.stream.Collectors.toList());
+                    }
+
+                    for (PcapNetworkInterface nif : selectedInterfaces) {
                         System.out.println("Iniciando captura en: " + nif.getName() + " - " + nif.getDescription());
 
-                        PcapHandle handle = nif.openLive(65536, PcapNetworkInterface.PromiscuousMode.PROMISCUOUS, 10);
+                        // Modo no promiscuo para WiFi en Windows (evita bloqueos)
+                        PcapNetworkInterface.PromiscuousMode mode =
+                            nif.getDescription() != null && nif.getDescription().toLowerCase().contains("802.11")
+                            ? PcapNetworkInterface.PromiscuousMode.NONPROMISCUOUS
+                            : PcapNetworkInterface.PromiscuousMode.PROMISCUOUS;
+
+                        PcapHandle handle = nif.openLive(65536, mode, 10);
                         activeHandles.add(handle);
 
                         Thread captureInterfaceThread = new Thread(() -> {
                             try {
+                                System.out.println(">>> Hilo de captura iniciado para: " + nif.getDescription());
                                 handle.loop(-1, new PacketListener() {
                                     @Override
                                     public void gotPacket(Packet packet) {
@@ -130,7 +157,6 @@ public class NetworkTrafficService {
 
                                         classifyPacket(packet, packetSize);
 
-                                        // Limpiar mapa de conexiones periódicamente
                                         long count = packetCounter.incrementAndGet();
                                         if (count % CLEANUP_INTERVAL == 0) {
                                             cleanupConnectionMap();
@@ -144,7 +170,7 @@ public class NetworkTrafficService {
                                             currentSpeed = (bytesDiff / (1024.0 * 1024.0)) / (timeDiff / 1000.0);
 
                                             calculateProtocolSpeeds(timeDiff);
-                                            calculateIpSpeeds(timeDiff); 
+                                            calculateIpSpeeds(timeDiff);
 
                                             lastBytes = newTotal;
                                             lastTime = currentTime;
@@ -179,29 +205,35 @@ public class NetworkTrafficService {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Cálculo de velocidades por IP
+    // -------------------------------------------------------------------------
+
     private void calculateIpSpeeds(long timeDiff) {
-    double timeInSeconds = timeDiff / 1000.0;
-    Map<String, Double> snapshot = new ConcurrentHashMap<>();
+        double timeInSeconds = timeDiff / 1000.0;
+        Map<String, Double> snapshot = new ConcurrentHashMap<>();
 
-    for (Map.Entry<String, AtomicLong> entry : bytesPerIp.entrySet()) {
-        String ip      = entry.getKey();
-        long   current = entry.getValue().get();
-        long   last    = lastBytesPerIp.getOrDefault(ip, 0L);
-        long   diff    = current - last;
+        for (Map.Entry<String, AtomicLong> entry : bytesPerIp.entrySet()) {
+            String ip      = entry.getKey();
+            long   current = entry.getValue().get();
+            long   last    = lastBytesPerIp.getOrDefault(ip, 0L);
+            long   diff    = current - last;
 
-        double mbps = (diff / (1024.0 * 1024.0)) / timeInSeconds;
-        if (mbps > 0.0001) { // Filtrar IPs con tráfico insignificante
-            snapshot.put(ip, mbps);
+            double mbps = (diff / (1024.0 * 1024.0)) / timeInSeconds;
+            if (mbps > 0.0001) {
+                snapshot.put(ip, mbps);
+            }
+
+            lastBytesPerIp.put(ip, current);
         }
 
-        lastBytesPerIp.put(ip, current);
+        lastBytesPerIp.keySet().retainAll(bytesPerIp.keySet());
+        speedPerIp = snapshot;
     }
 
-    // Limpiar IPs que ya no tienen tráfico activo (no aparecieron en este ciclo)
-    lastBytesPerIp.keySet().retainAll(bytesPerIp.keySet());
-
-    speedPerIp = snapshot;
-}
+    // -------------------------------------------------------------------------
+    // Parada y reset
+    // -------------------------------------------------------------------------
 
     public void stopCapturing() {
         if (isCapturing.compareAndSet(true, false)) {
@@ -230,113 +262,98 @@ public class NetworkTrafficService {
     // -------------------------------------------------------------------------
 
     private void classifyPacket(Packet packet, int size) {
+        IpV4Packet ipv4 = packet.get(IpV4Packet.class);
+        if (ipv4 != null) {
+            String src = ipv4.getHeader().getSrcAddr().getHostAddress();
+            String dst = ipv4.getHeader().getDstAddr().getHostAddress();
 
-    IpV4Packet ipv4 = packet.get(IpV4Packet.class);
-    if (ipv4 != null) {
-        String src = ipv4.getHeader().getSrcAddr().getHostAddress();
-        String dst = ipv4.getHeader().getDstAddr().getHostAddress();
-
-        // Solo contabilizar IPs de tu red local
-        if (isLocalIp(src)) {
-            bytesPerIp.computeIfAbsent(src, k -> new AtomicLong(0)).addAndGet(size);
-        }
-        if (isLocalIp(dst)) {
-            bytesPerIp.computeIfAbsent(dst, k -> new AtomicLong(0)).addAndGet(size);
-        }
-
-    } else {
-        IpV6Packet ipv6 = packet.get(IpV6Packet.class);
-        if (ipv6 != null) {
-            String src = ipv6.getHeader().getSrcAddr().getHostAddress();
-            String dst = ipv6.getHeader().getDstAddr().getHostAddress();
-
-            // IPv6 local: fe80:: (link-local) y fc00::/7 (unique local)
-            if (isLocalIpv6(src)) {
+            if (isLocalIp(src)) {
                 bytesPerIp.computeIfAbsent(src, k -> new AtomicLong(0)).addAndGet(size);
             }
-            if (isLocalIpv6(dst)) {
+            if (isLocalIp(dst)) {
                 bytesPerIp.computeIfAbsent(dst, k -> new AtomicLong(0)).addAndGet(size);
             }
+        } else {
+            IpV6Packet ipv6 = packet.get(IpV6Packet.class);
+            if (ipv6 != null) {
+                String src = ipv6.getHeader().getSrcAddr().getHostAddress();
+                String dst = ipv6.getHeader().getDstAddr().getHostAddress();
+
+                if (isLocalIpv6(src)) {
+                    bytesPerIp.computeIfAbsent(src, k -> new AtomicLong(0)).addAndGet(size);
+                }
+                if (isLocalIpv6(dst)) {
+                    bytesPerIp.computeIfAbsent(dst, k -> new AtomicLong(0)).addAndGet(size);
+                }
+            }
+        }
+
+        TcpPacket tcpPacket = packet.get(TcpPacket.class);
+        UdpPacket udpPacket = packet.get(UdpPacket.class);
+
+        if (tcpPacket != null) {
+            classifyTcpPacket(tcpPacket, size);
+        } else if (udpPacket != null) {
+            classifyUdpPacket(udpPacket, size);
+        } else {
+            otherBytes.addAndGet(size);
         }
     }
 
-    TcpPacket tcpPacket = packet.get(TcpPacket.class);
-    UdpPacket udpPacket = packet.get(UdpPacket.class);
-
-    if (tcpPacket != null) {
-        classifyTcpPacket(tcpPacket, size);
-    } else if (udpPacket != null) {
-        classifyUdpPacket(udpPacket, size);
-    } else {
-        otherBytes.addAndGet(size);
+    private boolean isLocalIp(String ip) {
+        return ip.startsWith("192.168.")
+            || ip.startsWith("10.")
+            || ip.startsWith("172.16.") || ip.startsWith("172.17.")
+            || ip.startsWith("172.18.") || ip.startsWith("172.19.")
+            || ip.startsWith("172.20.") || ip.startsWith("172.21.")
+            || ip.startsWith("172.22.") || ip.startsWith("172.23.")
+            || ip.startsWith("172.24.") || ip.startsWith("172.25.")
+            || ip.startsWith("172.26.") || ip.startsWith("172.27.")
+            || ip.startsWith("172.28.") || ip.startsWith("172.29.")
+            || ip.startsWith("172.30.") || ip.startsWith("172.31.")
+            || ip.equals("127.0.0.1");
     }
-}
 
-// IPv4 privadas: 192.168.x.x / 10.x.x.x / 172.16-31.x.x / loopback
-private boolean isLocalIp(String ip) {
-    return ip.startsWith("192.168.")
-        || ip.startsWith("10.")
-        || ip.startsWith("172.16.") || ip.startsWith("172.17.")
-        || ip.startsWith("172.18.") || ip.startsWith("172.19.")
-        || ip.startsWith("172.20.") || ip.startsWith("172.21.")
-        || ip.startsWith("172.22.") || ip.startsWith("172.23.")
-        || ip.startsWith("172.24.") || ip.startsWith("172.25.")
-        || ip.startsWith("172.26.") || ip.startsWith("172.27.")
-        || ip.startsWith("172.28.") || ip.startsWith("172.29.")
-        || ip.startsWith("172.30.") || ip.startsWith("172.31.")
-        || ip.equals("127.0.0.1");
-}
+    private boolean isLocalIpv6(String ip) {
+        String lower = ip.toLowerCase();
+        return lower.startsWith("fe80:")
+            || lower.startsWith("fc")
+            || lower.startsWith("fd")
+            || lower.equals("::1");
+    }
 
-// IPv6 locales: link-local (fe80::) y unique-local (fc:: / fd::)
-private boolean isLocalIpv6(String ip) {
-    String lower = ip.toLowerCase();
-    return lower.startsWith("fe80:")
-        || lower.startsWith("fc")
-        || lower.startsWith("fd")
-        || lower.equals("::1");
-}
     private void classifyTcpPacket(TcpPacket tcpPacket, int size) {
         int srcPort = tcpPacket.getHeader().getSrcPort().valueAsInt();
         int dstPort = tcpPacket.getHeader().getDstPort().valueAsInt();
 
-        // Streaming tradicional (RTMP, RTSP)
         if (isStreamingPort(srcPort) || isStreamingPort(dstPort)) {
             streamingBytes.addAndGet(size);
             return;
         }
 
-        // Apps de streaming conocidas por puerto
         if (isKnownStreamingAppPort(srcPort) || isKnownStreamingAppPort(dstPort)) {
             streamingBytes.addAndGet(size);
             return;
         }
 
-        // VoIP SIP sobre TCP
         if (srcPort == 5060 || dstPort == 5060) {
             voipBytes.addAndGet(size);
             return;
         }
 
-        // Tráfico HTTPS/HTTP
         if (isHttpPort(srcPort) || isHttpPort(dstPort)) {
-            // Construir clave de conexión (bidireccional)
             String connKey = buildConnectionKey(srcPort, dstPort);
-
-            // ¿Ya conocemos el tipo de esta conexión?
             String knownType = connectionTypeMap.get(connKey);
 
             if (knownType != null) {
-                // Usar el tipo ya detectado para esta conexión
                 applyProtocol(knownType, size);
                 return;
             }
 
-            // No conocemos esta conexión aún — intentar leer SNI del ClientHello
             Packet payload = tcpPacket.getPayload();
             if (payload != null) {
                 String sni = extractSni(payload.getRawData());
                 if (sni != null) {
-                    // Tenemos SNI — clasificar y guardar para futuros paquetes
                     String type = isStreamingSni(sni) ? "streaming" : "http";
                     connectionTypeMap.put(connKey, type);
                     applyProtocol(type, size);
@@ -345,8 +362,6 @@ private boolean isLocalIpv6(String ip) {
                 }
             }
 
-            // Sin SNI (paquete de datos de conexión ya establecida sin clasificar)
-            // Lo marcamos como http por defecto
             httpBytes.addAndGet(size);
             return;
         }
@@ -358,38 +373,28 @@ private boolean isLocalIpv6(String ip) {
         int srcPort = udpPacket.getHeader().getSrcPort().valueAsInt();
         int dstPort = udpPacket.getHeader().getDstPort().valueAsInt();
 
-        // VoIP - RTP/RTCP
         if (isVoipPort(srcPort) || isVoipPort(dstPort)) {
             voipBytes.addAndGet(size);
             return;
         }
 
-        // Heurística VoIP: paquetes pequeños en puertos altos
         if (size < 300 && (srcPort >= 10000 || dstPort >= 10000)) {
             voipBytes.addAndGet(size);
             return;
         }
 
-        // Streaming UDP tradicional
         if (isStreamingPort(srcPort) || isStreamingPort(dstPort)) {
             streamingBytes.addAndGet(size);
             return;
         }
 
-        // QUIC (UDP 443) - usado por YouTube, Netflix, etc.
         if (srcPort == 443 || dstPort == 443) {
-            // QUIC también tiene SNI en el primer paquete (CRYPTO frame)
-            // pero es más complejo de parsear; usamos heurística de tamaño
-            // Paquetes QUIC iniciales (ClientHello) son grandes ~1200 bytes
-            // Los de datos de video son también grandes y constantes
             if (size > 100) {
-                // Intentar detectar por mapa de conexiones QUIC
                 String connKey = "quic:" + Math.min(srcPort, dstPort) + "-" + Math.max(srcPort, dstPort);
                 String knownType = connectionTypeMap.get(connKey);
                 if (knownType != null) {
                     applyProtocol(knownType, size);
                 } else {
-                    // Sin info previa, clasificar como http (conservador)
                     httpBytes.addAndGet(size);
                 }
             } else {
@@ -398,7 +403,6 @@ private boolean isLocalIpv6(String ip) {
             return;
         }
 
-        // DNS, NTP
         if (srcPort == 53 || dstPort == 53 || srcPort == 123 || dstPort == 123) {
             otherBytes.addAndGet(size);
             return;
@@ -411,9 +415,6 @@ private boolean isLocalIpv6(String ip) {
     // Helpers de clasificación
     // -------------------------------------------------------------------------
 
-    /**
-     * Aplica bytes al contador del protocolo indicado
-     */
     private void applyProtocol(String type, int size) {
         switch (type) {
             case "streaming" -> streamingBytes.addAndGet(size);
@@ -423,19 +424,12 @@ private boolean isLocalIpv6(String ip) {
         }
     }
 
-    /**
-     * Clave bidireccional para identificar una conexión TCP
-     * Ejemplo: "443-52341" (siempre el puerto menor primero)
-     */
     private String buildConnectionKey(int srcPort, int dstPort) {
         int lo = Math.min(srcPort, dstPort);
         int hi = Math.max(srcPort, dstPort);
         return lo + "-" + hi;
     }
 
-    /**
-     * Limpia el mapa de conexiones si crece demasiado
-     */
     private void cleanupConnectionMap() {
         if (connectionTypeMap.size() > MAX_CONNECTIONS) {
             connectionTypeMap.clear();
@@ -443,44 +437,30 @@ private boolean isLocalIpv6(String ip) {
         }
     }
 
-    /**
-     * Extrae el SNI del ClientHello TLS.
-     * El SNI va en texto claro aunque la conexión sea cifrada.
-     */
     private String extractSni(byte[] payload) {
         try {
             if (payload == null || payload.length < 43) return null;
 
-            // TLS Handshake = 0x16, ClientHello = 0x01
             if (payload[0] != 0x16) return null;
             if (payload[5] != 0x01) return null;
 
             int pos = 43;
-
             if (pos >= payload.length) return null;
 
-            // Saltar Session ID
             int sessionIdLength = payload[pos] & 0xFF;
             pos += 1 + sessionIdLength;
-
             if (pos + 2 >= payload.length) return null;
 
-            // Saltar Cipher Suites
             int cipherSuitesLength = ((payload[pos] & 0xFF) << 8) | (payload[pos + 1] & 0xFF);
             pos += 2 + cipherSuitesLength;
-
             if (pos + 1 >= payload.length) return null;
 
-            // Saltar Compression Methods
             int compressionMethodsLength = payload[pos] & 0xFF;
             pos += 1 + compressionMethodsLength;
-
             if (pos + 2 >= payload.length) return null;
 
-            // Leer Extensions
             int extensionsLength = ((payload[pos] & 0xFF) << 8) | (payload[pos + 1] & 0xFF);
             pos += 2;
-
             int extensionsEnd = pos + extensionsLength;
 
             while (pos + 4 <= extensionsEnd && pos + 4 <= payload.length) {
@@ -488,12 +468,7 @@ private boolean isLocalIpv6(String ip) {
                 int extLength = ((payload[pos + 2] & 0xFF) << 8) | (payload[pos + 3] & 0xFF);
                 pos += 4;
 
-                // Extensión SNI = tipo 0x0000
                 if (extType == 0x0000 && pos + extLength <= payload.length) {
-                    // pos+0,1 = SNI list length
-                    // pos+2   = SNI type (0 = host_name)
-                    // pos+3,4 = nombre length
-                    // pos+5.. = nombre
                     if (pos + 5 > payload.length) return null;
                     int nameLength = ((payload[pos + 3] & 0xFF) << 8) | (payload[pos + 4] & 0xFF);
                     int nameStart  = pos + 5;
@@ -503,50 +478,46 @@ private boolean isLocalIpv6(String ip) {
 
                 pos += extLength;
             }
-
         } catch (Exception e) {
-            // Ignorar errores de parsing — paquete malformado o fragmentado
+            // Ignorar errores de parsing
         }
         return null;
     }
 
-    /**
-     * Determina si un hostname SNI corresponde a un servicio de streaming
-     */
     private boolean isStreamingSni(String sni) {
         if (sni == null) return false;
         String s = sni.toLowerCase();
-        return s.contains("googlevideo.com")   // YouTube
-            || s.contains("youtube.com")       // YouTube
-            || s.contains("ytimg.com")         // YouTube imágenes/chunks
-            || s.contains("nflxvideo.net")     // Netflix video
-            || s.contains("nflximg.net")       // Netflix imágenes
-            || s.contains("nflxext.com")       // Netflix CDN
-            || s.contains("netflix.com")       // Netflix
-            || s.contains("fast.com")          // Netflix speedtest
-            || s.contains("akamaihd.net")      // CDN usado por Twitch/otros
-            || s.contains("twitchsvc.net")     // Twitch
-            || s.contains("twitch.tv")         // Twitch
-            || s.contains("live-video.net")    // Twitch live
-            || s.contains("jtvnw.net")         // Twitch CDN
-            || s.contains("scdn.co")           // Spotify CDN
-            || s.contains("spotifycdn.com")    // Spotify
-            || s.contains("spotify.com")       // Spotify
-            || s.contains("aaplimg.com")       // Apple TV+
-            || s.contains("mzstatic.com")      // Apple TV+
-            || s.contains("disneyplus.com")    // Disney+
-            || s.contains("dssott.com")        // Disney+ CDN
-            || s.contains("bamgrid.com")       // Disney+ CDN
-            || s.contains("hbomax.com")        // HBO Max
-            || s.contains("hbo.com")           // HBO
-            || s.contains("max.com")           // Max (HBO)
-            || s.contains("primevideo.com")    // Amazon Prime Video
-            || s.contains("amazonvideo.com")   // Amazon Prime Video
-            || s.contains("aiv-cdn.net")       // Amazon Prime CDN
-            || s.contains("crunchyroll.com")   // Crunchyroll
-            || s.contains("vrv.co")            // VRV (Crunchyroll)
-            || s.contains("plex.tv")           // Plex
-            || s.contains("plexapp.com");      // Plex CDN
+        return s.contains("googlevideo.com")
+            || s.contains("youtube.com")
+            || s.contains("ytimg.com")
+            || s.contains("nflxvideo.net")
+            || s.contains("nflximg.net")
+            || s.contains("nflxext.com")
+            || s.contains("netflix.com")
+            || s.contains("fast.com")
+            || s.contains("akamaihd.net")
+            || s.contains("twitchsvc.net")
+            || s.contains("twitch.tv")
+            || s.contains("live-video.net")
+            || s.contains("jtvnw.net")
+            || s.contains("scdn.co")
+            || s.contains("spotifycdn.com")
+            || s.contains("spotify.com")
+            || s.contains("aaplimg.com")
+            || s.contains("mzstatic.com")
+            || s.contains("disneyplus.com")
+            || s.contains("dssott.com")
+            || s.contains("bamgrid.com")
+            || s.contains("hbomax.com")
+            || s.contains("hbo.com")
+            || s.contains("max.com")
+            || s.contains("primevideo.com")
+            || s.contains("amazonvideo.com")
+            || s.contains("aiv-cdn.net")
+            || s.contains("crunchyroll.com")
+            || s.contains("vrv.co")
+            || s.contains("plex.tv")
+            || s.contains("plexapp.com");
     }
 
     // -------------------------------------------------------------------------
@@ -573,7 +544,7 @@ private boolean isLocalIpv6(String ip) {
     }
 
     // -------------------------------------------------------------------------
-    // Cálculo de velocidades
+    // Cálculo de velocidades por protocolo
     // -------------------------------------------------------------------------
 
     private void calculateProtocolSpeeds(long timeDiff) {
@@ -626,8 +597,8 @@ private boolean isLocalIpv6(String ip) {
         SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
 
         emitter.onCompletion(() -> emitters.remove(emitter));
-        emitter.onTimeout(    () -> emitters.remove(emitter));
-        emitter.onError(   e  -> emitters.remove(emitter));
+        emitter.onTimeout(   () -> emitters.remove(emitter));
+        emitter.onError(  e  -> emitters.remove(emitter));
 
         try {
             TrafficData initialData = getCurrentTrafficData();
@@ -699,17 +670,17 @@ private boolean isLocalIpv6(String ip) {
     public static class TrafficData {
         private final double speed;
         private final Protocolo protocolo;
-        private final Map<String, Double> speedPerIp; 
+        private final Map<String, Double> speedPerIp;
 
         public TrafficData(double speed, Protocolo protocolStats, Map<String, Double> speedPerIp) {
-            this.speed    = speed;
+            this.speed     = speed;
             this.protocolo = protocolStats;
-            this.speedPerIp  = speedPerIp;
+            this.speedPerIp = speedPerIp;
         }
 
         public double getSpeed() { return speed; }
         public Protocolo getProtocolStats() { return protocolo; }
-         public Map<String, Double> getSpeedPerIp()  { return speedPerIp; } 
+        public Map<String, Double> getSpeedPerIp() { return speedPerIp; }
     }
 
     // -------------------------------------------------------------------------

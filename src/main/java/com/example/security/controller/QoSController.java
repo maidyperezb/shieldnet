@@ -62,9 +62,16 @@ public ResponseEntity<QoSData> measureQoS(@RequestBody Map<String, Object> reque
      * GET /api/network/qos/latest
      * Obtiene las últimas 50 métricas
      */
+    
     @GetMapping("/latest")
-    public ResponseEntity<List<QoSMetrics>> getLatestMetrics() {
-        List<QoSMetrics> metrics = qosService.getRecentMetrics(24);
+    public ResponseEntity<List<QoSMetrics>> getLatestMetrics(
+            @RequestParam(defaultValue = "0") int hours) {
+        List<QoSMetrics> metrics;
+        if (hours > 0) {
+            metrics = qosService.getRecentMetrics(hours);
+        } else {
+            metrics = qosService.getAllMetrics(); 
+        }
         return ResponseEntity.ok(metrics);
     }
 

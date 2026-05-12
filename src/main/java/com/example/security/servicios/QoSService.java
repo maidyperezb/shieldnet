@@ -27,13 +27,12 @@ public class QoSService {
     
     @Autowired
     private QoSMetricsRepository qosRepository;
+
+    @Autowired
+    private QosPredictionService predictionService;
     
-    /**
-     * Mide QoS usando ping extendido (latencia, jitter, pérdida de paquetes)
-     */
     public QoSData measureQoS(String targetIp, int packetCount) {
         try {
-            // Construir comando ping según el SO
             String os = System.getProperty("os.name").toLowerCase();
             ProcessBuilder pb;
             
@@ -55,7 +54,6 @@ public class QoSService {
             String line;
             while ((line = reader.readLine()) != null) {
                 logger.debug("Línea ping: {}", line);
-                
                 Double rtt = extractRTT(line);
                 if (rtt != null) {
                     rttValues.add(rtt);
@@ -66,13 +64,11 @@ public class QoSService {
             
             process.waitFor();
             
-            logger.info("Ping completado - Enviados: {}, Recibidos: {}, RTTs capturados: {}", 
+            logger.info("Ping completado - Enviados: {}, Recibidos: {}, RTTs capturados: {}",
                         sent, received, rttValues.size());
             
-            // Calcular métricas
             QoSData qosData = calculateMetrics(rttValues, sent, received);
             
-            // Guardar en BD
             saveQoSMetrics(targetIp, qosData, "ICMP");
             
             return qosData;
@@ -83,20 +79,15 @@ public class QoSService {
         }
     }
     
-    /**
-     * Extrae el RTT de una línea de salida de ping
-     */
     private Double extractRTT(String line) {
         if (line.contains("time") || line.contains("tiempo")) {
             logger.debug("Analizando línea con tiempo: {}", line);
         }
         
-        // Intentar varios patrones
         Pattern[] patterns = {
             Pattern.compile("time[=<](\\d+(?:\\.\\d+)?)\\s*ms", Pattern.CASE_INSENSITIVE),
             Pattern.compile("time=(\\d+(?:\\.\\d+)?)\\s*ms", Pattern.CASE_INSENSITIVE),
             Pattern.compile("tiempo[=<](\\d+(?:\\.\\d+)?)\\s*ms", Pattern.CASE_INSENSITIVE),
-
         };
         
         for (Pattern pattern : patterns) {
@@ -104,7 +95,7 @@ public class QoSService {
             if (matcher.find()) {
                 try {
                     double rtt = Double.parseDouble(matcher.group(1));
-                    logger.debug("✅ RTT extraído: {}ms usando patrón: {}", rtt, pattern.pattern());
+                    logger.debug("RTT extraído: {}ms", rtt);
                     return rtt;
                 } catch (NumberFormatException e) {
                     logger.warn("Error parseando RTT: {}", matcher.group(1));
@@ -115,18 +106,14 @@ public class QoSService {
         return null;
     }
     
-    /**
-     * Calcula todas las métricas QoS
-     */
     private QoSData calculateMetrics(List<Double> rttValues, int sent, int received) {
         QoSData qosData = new QoSData();
         
         if (rttValues.isEmpty() || received == 0) {
-            logger.warn("No se recibieron respuestas de ping. Paquetes enviados: {}, recibidos: {}", sent, received);
+            logger.warn("No se recibieron respuestas de ping. Enviados: {}, recibidos: {}", sent, received);
             return createErrorQoSData();
         }
         
-        // 1. LATENCIA (promedio de RTT)
         double sum = 0;
         double min = Double.MAX_VALUE;
         double max = Double.MIN_VALUE;
@@ -143,74 +130,51 @@ public class QoSService {
         qosData.setRttMinMs(min);
         qosData.setRttMaxMs(max);
         
-        // 2. JITTER (variación de latencia)
         double jitter = calculateJitter(rttValues);
         qosData.setJitterMs(jitter);
         
-        // 3. PÉRDIDA DE PAQUETES
-        int receivedNormalized = Math.min(received, sent); // ← línea nueva
-        int lost = sent - receivedNormalized;              // ← usa receivedNormalized
+        int receivedNormalized = Math.min(received, sent);
+        int lost = sent - receivedNormalized;
         double packetLoss = (lost / (double) sent) * 100.0;
         qosData.setPacketLossPercent(packetLoss);
         qosData.setPacketsSent(sent);
-        qosData.setPacketsReceived(receivedNormalized);    // ← usa receivedNormalized
+        qosData.setPacketsReceived(receivedNormalized);
         qosData.setPacketsLost(lost);
         
-        // 4. MOS SCORE (calidad de voz)
         double mosScore = calculateMOSScore(avgLatency, jitter, packetLoss);
         qosData.setMosScore(mosScore);
         
-        // 5. QUALITY STATUS
         String qualityStatus = determineQualityStatus(mosScore);
         qosData.setQualityStatus(qualityStatus);
         
-        // ✅ CORRECCIÓN: Sin {:.2f} en logger
-        logger.info("QoS calculado - Latencia: {}ms, Jitter: {}ms, Pérdida: {}%, MOS: {}, Estado: {}", 
-                    String.format("%.2f", avgLatency), 
-                    String.format("%.2f", jitter), 
-                    String.format("%.2f", packetLoss), 
-                    String.format("%.2f", mosScore), 
+        logger.info("QoS calculado - Latencia: {}ms, Jitter: {}ms, Pérdida: {}%, MOS: {}, Estado: {}",
+                    String.format("%.2f", avgLatency),
+                    String.format("%.2f", jitter),
+                    String.format("%.2f", packetLoss),
+                    String.format("%.2f", mosScore),
                     qualityStatus);
         
         return qosData;
     }
 
-    /**
-     * Determina el estado de calidad según el MOS Score
-     */
     private String determineQualityStatus(double mosScore) {
-        if (mosScore >= 4.3) {
-            return "EXCELLENT";
-        } else if (mosScore >= 4.0) {
-            return "GOOD";
-        } else if (mosScore >= 3.6) {
-            return "FAIR";
-        } else if (mosScore >= 3.1) {
-            return "POOR";
-        } else {
-            return "BAD";
-        }
+        if (mosScore >= 4.3) return "EXCELENTE";
+        else if (mosScore >= 4.0) return "BUENO";
+        else if (mosScore >= 3.6) return "ACEPTABLE";
+        else if (mosScore >= 3.1) return "MALO";
+        else return "MUY MALO";
     }
     
-    /**
-     * Calcula el Jitter (variación del delay)
-     */
     private double calculateJitter(List<Double> rttValues) {
-        if (rttValues.size() < 2) {
-            return 0.0;
-        }
+        if (rttValues.size() < 2) return 0.0;
         
         double jitterSum = 0.0;
         for (int i = 1; i < rttValues.size(); i++) {
             jitterSum += Math.abs(rttValues.get(i) - rttValues.get(i - 1));
         }
-        
         return jitterSum / (rttValues.size() - 1);
     }
     
-    /**
-     * Calcula el MOS Score (Mean Opinion Score)
-     */
     private double calculateMOSScore(double latency, double jitter, double packetLoss) {
         double r = 93.2;
         
@@ -225,7 +189,6 @@ public class QoSService {
         double packetLossPenalty = packetLoss * 2.5;
         
         r = r - latencyPenalty - jitterPenalty - packetLossPenalty;
-        
         if (r < 0) r = 0;
         if (r > 100) r = 100;
         
@@ -244,9 +207,6 @@ public class QoSService {
         return Math.round(mos * 100.0) / 100.0;
     }
     
-    /**
-     * Guarda las métricas en la base de datos
-     */
     private void saveQoSMetrics(String targetIp, QoSData qosData, String protocolType) {
         try {
             QoSMetrics metrics = new QoSMetrics();
@@ -263,7 +223,46 @@ public class QoSService {
             metrics.setPacketsLost(qosData.getPacketsLost());
             metrics.setProtocolType(protocolType);
             metrics.setQualityStatus(qosData.getQualityStatus());
-            
+
+            // ── INTEGRACIÓN ML ────────────────────────────────────────
+            try {
+                // Buscar medición anterior del mismo host para calcular tendencia
+                double mosAnterior     = qosData.getMosScore();    // default: sin cambio
+                double jitterAnterior  = qosData.getJitterMs();
+                double latencyAnterior = qosData.getLatencyMs();
+
+                List<QoSMetrics> historial = qosRepository.findByTargetIpOrderByTimestampDesc(targetIp);
+                if (!historial.isEmpty()) {
+                    QoSMetrics anterior = historial.get(0);
+                    mosAnterior     = anterior.getMosScore();
+                    jitterAnterior  = anterior.getJitterMs();
+                    latencyAnterior = anterior.getLatencyMs();
+                    logger.info("Tendencia detectada para {} - MOS anterior: {}, actual: {}",
+                                targetIp,
+                                String.format("%.2f", mosAnterior),
+                                String.format("%.2f", qosData.getMosScore()));
+                } else {
+                    logger.info("Primera medición para {}, sin historial previo", targetIp);
+                }
+
+                String predicted = predictionService.predict(
+                    qosData.getMosScore(),     mosAnterior,
+                    qosData.getJitterMs(),     jitterAnterior,
+                    qosData.getLatencyMs(),    latencyAnterior,
+                    qosData.getPacketLossPercent()
+                );
+
+                if (predicted != null) {
+                    metrics.setPredictedStatus(predicted);
+                    qosData.setPredictedStatus(predicted);
+                    logger.info("ML predijo estado futuro: {} (sistema actual: {})",
+                                predicted, qosData.getQualityStatus());
+                }
+            } catch (Exception e) {
+                logger.warn("Predicción ML no disponible (no crítico): {}", e.getMessage());
+            }
+            // ─────────────────────────────────────────────────────────
+
             qosRepository.save(metrics);
             logger.info("Métricas QoS guardadas para {}: {}", targetIp, qosData);
         } catch (Exception e) {
@@ -271,45 +270,30 @@ public class QoSService {
         }
     }
     
-    /**
-     * Crea un objeto QoSData con valores de error
-     */
     private QoSData createErrorQoSData() {
         QoSData qosData = new QoSData();
         qosData.setLatencyMs(0.0);
         qosData.setJitterMs(0.0);
         qosData.setPacketLossPercent(100.0);
         qosData.setMosScore(1.0);
-        qosData.setQualityStatus("BAD");
+        qosData.setQualityStatus("MUY_MALO");
         return qosData;
     }
     
-    /**
-     * Obtiene métricas históricas
-     */
     public List<QoSMetrics> getRecentMetrics(int hours) {
         LocalDateTime since = LocalDateTime.now().minusHours(hours);
         return qosRepository.findRecentMetrics(since);
     }
     
-    /**
-     * Obtiene métricas por IP
-     */
     public List<QoSMetrics> getMetricsByIp(String targetIp) {
         return qosRepository.findByTargetIpOrderByTimestampDesc(targetIp);
     }
     
-    /**
-     * Obtiene promedio de MOS de las últimas 24 horas
-     */
     public Double getAverageMosScore() {
         LocalDateTime since = LocalDateTime.now().minusHours(24);
         return qosRepository.getAverageMosScore(since);
     }
 
-    /**
-     * Actualiza el flag duringActiveCall de la última métrica guardada
-     */
     public void updateLastMetricCallStatus(boolean duringCall) {
         try {
             List<QoSMetrics> lastMetrics = qosRepository.findTop10ByOrderByTimestampDesc();
@@ -317,7 +301,7 @@ public class QoSService {
                 QoSMetrics lastMetric = lastMetrics.get(0);
                 lastMetric.setDuringActiveCall(duringCall);
                 qosRepository.save(lastMetric);
-                logger.debug("Flag duringActiveCall actualizado a {} para métrica ID {}", 
+                logger.debug("Flag duringActiveCall actualizado a {} para métrica ID {}",
                             duringCall, lastMetric.getId());
             }
         } catch (Exception e) {
@@ -325,31 +309,29 @@ public class QoSService {
         }
     }
 
-    /**
-     * Obtiene métricas comparativas (con llamada vs sin llamada)
-     */
     public Map<String, Object> getComparativeMetrics() {
         LocalDateTime last24Hours = LocalDateTime.now().minusHours(24);
         
-        // Promedios durante llamadas activas
-        Double avgMosDuringCalls = qosRepository.getAverageMosDuringCalls(last24Hours);
+        Double avgMosDuringCalls    = qosRepository.getAverageMosDuringCalls(last24Hours);
+        Double avgMosWithoutCalls   = qosRepository.getAverageMosWithoutCalls(last24Hours);
         
-        // Promedios sin llamadas activas
-        Double avgMosWithoutCalls = qosRepository.getAverageMosWithoutCalls(last24Hours);
-        
-        // Contadores
         List<QoSMetrics> allMetrics = qosRepository.findTop100ByOrderByTimestampDesc();
-        long duringCallCount = allMetrics.stream().filter(m -> m.getDuringActiveCall() != null && m.getDuringActiveCall()).count();
-        long withoutCallCount = allMetrics.stream().filter(m -> m.getDuringActiveCall() == null || !m.getDuringActiveCall()).count();
+        long duringCallCount = allMetrics.stream()
+            .filter(m -> m.getDuringActiveCall() != null && m.getDuringActiveCall()).count();
+        long withoutCallCount = allMetrics.stream()
+            .filter(m -> m.getDuringActiveCall() == null || !m.getDuringActiveCall()).count();
         
-        // ✅ CORRECCIÓN: Usar HashMap en lugar de Map.of() para mayor compatibilidad
         Map<String, Object> result = new HashMap<>();
-        result.put("averageMosDuringCalls", avgMosDuringCalls != null ? avgMosDuringCalls : 0.0);
-        result.put("averageMosWithoutCalls", avgMosWithoutCalls != null ? avgMosWithoutCalls : 0.0);
-        result.put("measurementsDuringCalls", duringCallCount);
+        result.put("averageMosDuringCalls",    avgMosDuringCalls    != null ? avgMosDuringCalls    : 0.0);
+        result.put("averageMosWithoutCalls",   avgMosWithoutCalls   != null ? avgMosWithoutCalls   : 0.0);
+        result.put("measurementsDuringCalls",  duringCallCount);
         result.put("measurementsWithoutCalls", withoutCallCount);
-        result.put("totalMeasurements", allMetrics.size());
+        result.put("totalMeasurements",        allMetrics.size());
         
         return result;
+    }
+
+    public List<QoSMetrics> getAllMetrics() {
+        return qosRepository.findAllByOrderByTimestampDesc();
     }
 }

@@ -68,6 +68,10 @@ public class QoSMetrics {
     @Column(name = "during_active_call")
     private Boolean duringActiveCall = false;
 
+    // Predicción del modelo ML (árbol de decisión)
+    @Column(name = "predicted_status")
+    private String predictedStatus;
+
     // Constructores
     public QoSMetrics() {
         this.timestamp = LocalDateTime.now();
@@ -195,16 +199,24 @@ public class QoSMetrics {
     }
 
     public Boolean getDuringActiveCall() {
-    return duringActiveCall;
-}
+        return duringActiveCall;
+    }
 
     public void setDuringActiveCall(Boolean duringActiveCall) {
         this.duringActiveCall = duringActiveCall;
     }
 
+    public String getPredictedStatus() {
+        return predictedStatus;
+    }
+
+    public void setPredictedStatus(String predictedStatus) {
+        this.predictedStatus = predictedStatus;
+    }
+
     @Override
     public String toString() {
-        return String.format("QoS[IP=%s, Latency=%.2fms, Jitter=%.2fms, Loss=%.2f%%, MOS=%.2f, Status=%s]",
-                targetIp, latencyMs, jitterMs, packetLossPercent, mosScore, qualityStatus);
+        return String.format("QoS[IP=%s, Latency=%.2fms, Jitter=%.2fms, Loss=%.2f%%, MOS=%.2f, Status=%s, Predicted=%s]",
+                targetIp, latencyMs, jitterMs, packetLossPercent, mosScore, qualityStatus, predictedStatus);
     }
 }

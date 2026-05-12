@@ -46,4 +46,7 @@ public interface QoSMetricsRepository extends JpaRepository<QoSMetrics, Long> {
 
     // Top 100 métricas recientes (para comparación)
     List<QoSMetrics> findTop100ByOrderByTimestampDesc();
+
+    // Obtener TODAS las métricas sin límite de tiempo
+    List<QoSMetrics> findAllByOrderByTimestampDesc();
 }

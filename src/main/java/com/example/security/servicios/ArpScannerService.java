@@ -1,13 +1,19 @@
 package com.example.security.servicios;
 
-import com.example.security.modelo.Dispositivo;
-import com.example.security.modelo.EstadoAutorizacion;
-import com.example.security.repositorio.DispositivoRepository;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-import org.pcap4j.core.*;
+import java.util.Date;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.pcap4j.core.BpfProgram;
+import org.pcap4j.core.NotOpenException;
+import org.pcap4j.core.PacketListener;
+import org.pcap4j.core.PcapAddress;
+import org.pcap4j.core.PcapHandle;
+import org.pcap4j.core.PcapNativeException;
+import org.pcap4j.core.PcapNetworkInterface;
+import org.pcap4j.core.Pcaps;
 import org.pcap4j.packet.ArpPacket;
-import org.pcap4j.packet.EthernetPacket;
 import org.pcap4j.packet.Packet;
 import org.pcap4j.packet.namednumber.ArpOperation;
 import org.slf4j.Logger;
@@ -15,10 +21,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.Date;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
+import com.example.security.modelo.Dispositivo;
+import com.example.security.modelo.EstadoAutorizacion;
+import com.example.security.repositorio.DispositivoRepository;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 
 @Service
 public class ArpScannerService {
@@ -87,45 +95,72 @@ public class ArpScannerService {
     // -------------------------------------------------------------------------
 
     private void runScan() {
-        try {
-            List<PcapNetworkInterface> interfaces = Pcaps.findAllDevs();
+    try {
+        List<PcapNetworkInterface> interfaces = Pcaps.findAllDevs();
 
-            if (interfaces.isEmpty()) {
-                logger.error("No se encontraron interfaces de red");
+        if (interfaces.isEmpty()) {
+            logger.error("No se encontraron interfaces de red");
+            return;
+        }
+
+        // ✅ Buscar la interfaz real, no usar índice fijo
+        PcapNetworkInterface nif = findRealInterface(interfaces);
+
+        if (nif == null) {
+            logger.error("No se encontró interfaz de red real (no virtual)");
+            return;
+        }
+
+        logger.info("ARP Scanner escuchando en: {} - {}", nif.getName(), nif.getDescription());
+
+        handle = nif.openLive(65536, PcapNetworkInterface.PromiscuousMode.PROMISCUOUS, 10);
+        handle.setFilter("arp", BpfProgram.BpfCompileMode.OPTIMIZE);
+
+        handle.loop(-1, (PacketListener) packet -> {
+            if (!isRunning.get()) {
+                try { handle.breakLoop(); } catch (NotOpenException e) { /* ignorar */ }
                 return;
             }
+            processArpPacket(packet);
+        });
 
-            // Usar el mismo índice que NetworkTrafficService (índice 4 = Wi-Fi)
-            // Ajusta el índice si tu red está en otra interfaz
-            PcapNetworkInterface nif = interfaces.get(4);
-            logger.info("ARP Scanner escuchando en: {} - {}", nif.getName(), nif.getDescription());
+    } catch (InterruptedException e) {
+        logger.info("ARP Scanner interrumpido");
+    } catch (PcapNativeException | NotOpenException e) {
+        logger.error("Error en ARP Scanner: {}", e.getMessage(), e);
+    }
+}
 
-            handle = nif.openLive(65536, PcapNetworkInterface.PromiscuousMode.PROMISCUOUS, 10);
+/**
+ * Encuentra la primera interfaz real (no virtual, no loopback)
+ */
+private PcapNetworkInterface findRealInterface(List<PcapNetworkInterface> interfaces) {
+    for (PcapNetworkInterface nif : interfaces) {
+        String desc = nif.getDescription() != null ? nif.getDescription().toLowerCase() : "";
+        String name = nif.getName().toLowerCase();
 
-            // Filtro BPF: solo paquetes ARP
-            handle.setFilter("arp", BpfProgram.BpfCompileMode.OPTIMIZE);
+        // Saltar virtuales
+        if (desc.contains("virtualbox") || desc.contains("vmware") || desc.contains("virtual")
+         || desc.contains("loopback")   || desc.contains("bluetooth")
+         || name.contains("vbox")       || name.contains("docker")
+         || name.contains("virbr")      || name.contains("lo")) {
+            logger.debug("Saltando interfaz virtual: {}", desc);
+            continue;
+        }
 
-            handle.loop(-1, new PacketListener() {
-                @Override
-                public void gotPacket(Packet packet) {
-                    if (!isRunning.get()) {
-                        try {
-                            handle.breakLoop();
-                        } catch (NotOpenException e) {
-                            logger.error("Error al detener ARP scanner: {}", e.getMessage());
-                        }
-                        return;
-                    }
-                    processArpPacket(packet);
+        // Verificar que tenga IP privada real
+        for (PcapAddress addr : nif.getAddresses()) {
+            if (addr.getAddress() instanceof java.net.Inet4Address) {
+                String ip = addr.getAddress().getHostAddress();
+                if (ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.20.")) {
+                    logger.info("Interfaz real seleccionada: {} [{}] IP={}", nif.getName(), desc, ip);
+                    return nif;
                 }
-            });
-
-        } catch (InterruptedException e) {
-            logger.info("ARP Scanner interrumpido");
-        } catch (PcapNativeException | NotOpenException e) {
-            logger.error("Error en ARP Scanner: {}", e.getMessage(), e);
+            }
         }
     }
+    return null;
+}
 
 
     @Autowired

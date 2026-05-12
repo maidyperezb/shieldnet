@@ -760,23 +760,23 @@
             margin-bottom: 15px;
         }
 
-        .qos-metric-card.excellent {
+        .qos-metric-card.excelente {
             border-left-color: #27ae60;
         }
 
-        .qos-metric-card.good {
+        .qos-metric-card.bueno {
             border-left-color: #3498db;
         }
 
-        .qos-metric-card.fair {
+        .qos-metric-card.aceptable {
             border-left-color: #f39c12;
         }
 
-        .qos-metric-card.poor {
+        .qos-metric-card.malo {
             border-left-color: #e67e22;
         }
 
-        .qos-metric-card.bad {
+        .qos-metric-card.muy-malo {
             border-left-color: #e74c3c;
         }
 
@@ -807,27 +807,27 @@
             margin-top: 10px;
         }
 
-        .qos-status-badge.excellent {
+        .qos-status-badge.excelente {
             background-color: rgba(39, 174, 96, 0.15);
             color: #27ae60;
         }
 
-        .qos-status-badge.good {
+        .qos-status-badge.bueno {
             background-color: rgba(52, 152, 219, 0.15);
             color: #3498db;
         }
 
-        .qos-status-badge.fair {
+        .qos-status-badge.aceptable {
             background-color: rgba(243, 156, 18, 0.15);
             color: #f39c12;
         }
 
-        .qos-status-badge.poor {
+        .qos-status-badge.malo {
             background-color: rgba(230, 126, 34, 0.15);
             color: #e67e22;
         }
 
-        .qos-status-badge.bad {
+        .qos-status-badge.muy-malo {
             background-color: rgba(231, 76, 60, 0.15);
             color: #e74c3c;
         }
@@ -892,6 +892,11 @@
         .sidebar .nav-link.active i {
             color: white;
         }
+
+        .qos-status-badge.estable    { background-color: rgba(39,174,96,0.15);  color: #27ae60; }
+        .qos-status-badge.en-riesgo  { background-color: rgba(243,156,18,0.15); color: #f39c12; }
+        .qos-status-badge.degradando { background-color: rgba(230,126,34,0.15); color: #e67e22; }
+        .qos-status-badge.critico    { background-color: rgba(231,76,60,0.15);  color: #e74c3c; }
 
     </style>
 </head>
@@ -1530,10 +1535,11 @@ function loadQoSView() {
                         <th>Pérdida (%)</th>
                         <th>MOS Score</th>
                         <th>Estado</th>
+                        <th>🤖 ML Predicción</th>
                     </tr>
                 </thead>
                 <tbody id="qosHistoryTableBody">
-                    <tr><td colspan="7" style="text-align: center;">Cargando...</td></tr>
+                    <tr><td colspan="8" style="text-align: center;">Cargando...</td></tr>
                 </tbody>
             </table>
             
@@ -1548,7 +1554,7 @@ function loadQoSView() {
 
 // Cargar historial de QoS con paginación
 function loadQoSHistory() {
-    fetch('/api/network/qos/latest')
+    fetch('/api/network/qos/latest?hours=0')
         .then(response => response.json())
         .then(data => {
             // Guardar todas las métricas
@@ -1566,6 +1572,15 @@ function loadQoSHistory() {
         });
 }
 
+function normalizeStatus(status) {
+    if (!status) return 'malo';
+    return status.toLowerCase()
+                 .replace(/\s+/g, '-')
+                 .replace(/_/g, '-')
+                 .replace('é', 'e')   // CRÍTICO → critico
+                 .replace('í', 'i');
+}
+
 // Renderizar página actual del historial QoS
 function renderQoSHistoryPage() {
     const tableBody = document.getElementById('qosHistoryTableBody');
@@ -1575,7 +1590,7 @@ function renderQoSHistoryPage() {
     
     // Si no hay datos
     if (allQoSMetrics.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No hay mediciones registradas</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No hay mediciones registradas</td></tr>';
         paginationContainer.innerHTML = '';
         return;
     }
@@ -1588,33 +1603,55 @@ function renderQoSHistoryPage() {
     
     // 2. Generar HTML de la tabla
     let html = '';
-    metricsToShow.forEach(metric => {
-        const statusClass = metric.qualityStatus.toLowerCase();
-        const timestamp = formatDateTime(metric.timestamp);
-        
-        // Emojis según estado
-        const statusEmoji = {
-            'excellent': '🟢',
-            'good': '🔵',
-            'fair': '🟡',
-            'poor': '🟠',
-            'bad': '🔴'
-        };
-        
-        const emoji = statusEmoji[statusClass] || '⚪';
-        
-        html += `
-            <tr>
-                <td><strong>${metric.targetIp}</strong></td>
-                <td>${timestamp}</td>
-                <td>${metric.latencyMs.toFixed(2)} ms</td>
-                <td>${metric.jitterMs.toFixed(2)} ms</td>
-                <td>${metric.packetLossPercent.toFixed(2)} %</td>
-                <td><strong>${metric.mosScore.toFixed(2)}</strong></td>
-                <td><span class="qos-status-badge ${statusClass}">${emoji} ${metric.qualityStatus}</span></td>
+    // DESPUÉS:
+metricsToShow.forEach(metric => {
+    const statusClass = normalizeStatus(metric.qualityStatus);
+    const timestamp = formatDateTime(metric.timestamp);
+
+    const statusEmoji = {
+        'excelente': '🟢',
+        'bueno': '🔵',
+        'aceptable': '🟡',
+        'malo': '🟠',
+        'muy-malo': '🔴'
+    };
+
+    const statusLabels = {
+        'excelente': 'Excelente',
+        'bueno': 'Bueno',
+        'aceptable': 'Aceptable',
+        'malo': 'Malo',
+        'muy-malo': 'Muy Malo',
+        'bad': 'Muy Malo'
+    };
+
+    const emoji = statusEmoji[statusClass] || '🔴';
+    const label = statusLabels[statusClass] || metric.qualityStatus;
+
+    html += `
+        <tr>
+            <td><strong>${metric.targetIp}</strong></td>
+            <td>${timestamp}</td>
+            <td>${metric.latencyMs.toFixed(2)} ms</td>
+            <td>${metric.jitterMs.toFixed(2)} ms</td>
+            <td>${metric.packetLossPercent.toFixed(2)} %</td>
+            <td><strong>${metric.mosScore.toFixed(2)}</strong></td>
+            <td><span class="qos-status-badge ${statusClass}">${emoji} ${label}</span></td>
+            <td>${metric.predictedStatus 
+                    ? `<span class="qos-status-badge ${normalizeStatus(metric.predictedStatus)}" 
+                        title="Predicción de estado en próxima medición">
+                        ${{
+                            'ESTABLE':    '✅ ESTABLE',
+                            'EN RIESGO':  '⚠️ EN RIESGO',
+                            'DEGRADANDO': '📉 DEGRADANDO',
+                            'CRITICO':    '🔴 CRÍTICO'
+                        }[metric.predictedStatus] || metric.predictedStatus}
+                    </span>` 
+                    : '<span style="color:#999; font-size:13px;">—</span>'
+                }</td>
             </tr>
-        `;
-    });
+    `;
+});
     
     tableBody.innerHTML = html;
     
@@ -1783,22 +1820,23 @@ function executeQoSMeasurement() {
 // Función para mostrar resultados QoS
 function displayQoSResults(data) {
     const qosOutput = document.getElementById('qosOutput');
-    const statusClass = data.qualityStatus.toLowerCase();
+    const statusClass = data.qualityStatus.toLowerCase().replace(/_/g, '-');
     
     const statusEmoji = {
-        'excellent': '🟢',
-        'good': '🔵',
-        'fair': '🟡',
-        'poor': '🟠',
-        'bad': '🔴'
+        'excelente': '🟢',
+        'bueno': '🔵',
+        'aceptable': '🟡',
+        'malo': '🟠',
+        'muy-malo': '🔴',
+        'muy_malo': '🔴'
     };
     
     const statusText = {
-        'excellent': 'Excelente',
-        'good': 'Bueno',
-        'fair': 'Aceptable',
-        'poor': 'Pobre',
-        'bad': 'Malo'
+        'excelente': 'Excelente',
+        'bueno': 'Bueno',
+        'aceptable': 'Aceptable',
+        'malo': 'Malo',
+        'muy-malo': 'Muy Malo'
     };
     
     qosOutput.innerHTML = `
@@ -1903,11 +1941,11 @@ function getPacketLossStatus(loss) {
 function getQoSInterpretation(data) {
     const status = data.qualityStatus.toUpperCase();
     
-    if (status === 'EXCELLENT' || status === 'GOOD') {
-        return `La conexión tiene una calidad ${status === 'EXCELLENT' ? 'excelente' : 'buena'}, ideal para llamadas VoIP, videollamadas y aplicaciones en tiempo real sin problemas.`;
-    } else if (status === 'FAIR') {
+    if (status === 'EXCELENTE' || status === 'BUENO') {
+        return `La conexión tiene una calidad ${status === 'EXCELENTE' ? 'excelente' : 'buena'}, ideal para llamadas VoIP, videollamadas y aplicaciones en tiempo real sin problemas.`;
+    } else if (status === 'ACEPTABLE') {
         return 'La conexión es aceptable para uso general, pero podría experimentar problemas menores en llamadas VoIP de alta calidad.';
-    } else if (status === 'POOR') {
+    } else if (status === 'MALO') {
         return 'La conexión tiene calidad pobre. Se recomienda investigar problemas de red. Las llamadas VoIP pueden tener interrupciones.';
     } else {
         return '⚠️ La conexión tiene calidad muy pobre. No se recomienda para aplicaciones en tiempo real. Revise su conexión de red inmediatamente.';
@@ -1963,7 +2001,7 @@ function displayLatestQoSData(data) {
     const container = document.getElementById('latestQoSData');
     if (!container) return;
     
-    const statusClass = data.qualityStatus.toLowerCase();
+    const statusClass = data.qualityStatus.toLowerCase().replace(/_/g, '-');
     
     container.innerHTML = `
         <div class="qos-comparison-grid">
