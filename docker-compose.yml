@@ -10,6 +10,12 @@ services:
       - "3306:3306"
     volumes:
       - db_data:/var/lib/mysql
+      - ./src/main/resources/db/shieldnet.sql:/docker-entrypoint-initdb.d/shieldnet.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
 
   ml:
     build:
@@ -53,10 +59,16 @@ services:
       ml.service.url: http://ml:5050
       ML_SERVICE_URL: http://ml:5050
       SERVER_PORT: 8080
+      GROQ_API_KEY: gsk_dummy_key_for_development
+      GROQ_API_BASE_URL: https://api.groq.com/openai
+      GROQ_CHAT_MODEL: llama-3.1-8b-instant
     depends_on:
-      - db
-      - ml
-      - optimizacion
+      db:
+        condition: service_healthy
+      ml:
+        condition: service_started
+      optimizacion:
+        condition: service_started
 
 volumes:
   db_data:
