@@ -956,6 +956,12 @@
         <a href="#" class="nav-link" id="logsBtn">
             <i class="fas fa-clipboard-list icon-logs"></i> Logs de Actividad
         </a>
+        <a href="#" class="nav-link" id="optimizacionBtn">
+            <i class="fas fa-calculator icon-qos"></i> Optimización
+        </a>
+        <a href="#" class="nav-link" id="dashboardPBIBtn">
+            <i class="fas fa-chart-pie icon-qos"></i> Dashboard Power BI
+        </a>
     </div>
 
         <!-- Main Content -->
@@ -998,6 +1004,41 @@
                     <h3>Escanear Puertos</h3>
                 </div>
             </div>
+
+            <!-- Estado del Sistema -->
+<h3 style="margin: 25px 0 15px 0; color: #2c3e50; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+    <i class="fas fa-server" style="color: #3498db; margin-right: 8px;"></i>Estado del Sistema
+</h3>
+<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+
+    <!-- ML API -->
+    <div style="background: white; border-radius: 8px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e0e0e0; border-top: 3px solid #9b59b6;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <i class="fas fa-brain" style="font-size: 22px; color: #9b59b6;"></i>
+            <span style="font-weight: 600; color: #2c3e50; font-size: 14px;">Servidor ML</span>
+        </div>
+        <div id="mlStatus" style="font-size: 13px; color: #999;">Verificando...</div>
+    </div>
+
+    <!-- VoIP Asterisk -->
+    <div style="background: white; border-radius: 8px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e0e0e0; border-top: 3px solid #9b59b6;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <i class="fas fa-phone-alt" style="font-size: 22px; color: #9b59b6;"></i>
+            <span style="font-weight: 600; color: #2c3e50; font-size: 14px;">VoIP Asterisk</span>
+        </div>
+        <div id="voipDashStatus" style="font-size: 13px; color: #999;">Verificando...</div>
+    </div>
+
+    <!-- Red General -->
+    <div style="background: white; border-radius: 8px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e0e0e0; border-top: 3px solid #9b59b6;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <i class="fas fa-wifi" style="font-size: 22px; color: #9b59b6;"></i>
+            <span style="font-weight: 600; color: #2c3e50; font-size: 14px;">Red General</span>
+        </div>
+        <div id="networkDashStatus" style="font-size: 13px; color: #999;">Verificando...</div>
+    </div>
+
+</div>
         </div>
     </div> <!-- Cierre de content-wrapper -->
 </div> <!-- Cierre de container -->
@@ -1183,6 +1224,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadUsersFromDatabase();
     loadDevicesFromDatabase();
     loadActivityLogs();
+    checkSystemStatus(); 
     
     // Event listeners para navegación
     document.getElementById('dashboardBtn').addEventListener('click', function(e) {
@@ -1240,6 +1282,16 @@ document.addEventListener('DOMContentLoaded', function() {
         e.preventDefault();
         executeQoSMeasurement();
     });
+
+    document.getElementById('optimizacionBtn').addEventListener('click', function(e) {
+        e.preventDefault();
+        loadOptimizacionView();
+    });
+
+    document.getElementById('dashboardPBIBtn').addEventListener('click', function(e) {
+    e.preventDefault();
+    loadPowerBIDashboard();
+});
         
     // Inicializar monitoreo de red
     initNetworkMonitoring();
@@ -1285,58 +1337,82 @@ document.addEventListener('DOMContentLoaded', function() {
     // Cargar contenido del panel principal
     // Cargar contenido del panel principal
     function loadDashboard() {
-        // Cambiar el contenido principal
-        document.getElementById('mainContent').innerHTML = `
-            <h2><i class="fas fa-tachometer-alt" style="color: #3498db; margin-right: 10px;"></i>Panel Principal</h2>
+    document.getElementById('mainContent').innerHTML = `
+        <h2><i class="fas fa-tachometer-alt" style="color: #3498db; margin-right: 10px;"></i>Panel Principal</h2>
 
-            <!-- Stats Cards -->
-            <div class="stats-container">
-                <div class="stat-card">
-                    <h3>Usuarios Registrados</h3>
-                    <div class="stat-value" id="userCount"></div>
-                </div>
-                <!-- Nueva tarjeta de Dispositivos Conectados -->
-        <div class="stat-card devices-stat-card">
-            <h3>Dispositivos Detectados</h3>
-            <div class="stat-value" id="totalDevices">0</div>
-            
-            <div class="device-status-container">
-                <div class="device-status-item">
-                    <span class="status-indicator status-autorizado"></span>
-                    <span class="status-label">Autorizados:</span>
-                    <span class="status-count" id="autorizadosCount">0</span>
-                </div>
-                <div class="device-status-item">
-                    <span class="status-indicator status-desconocido"></span>
-                    <span class="status-label">Desconocidos:</span>
-                    <span class="status-count" id="desconocidosCount">0</span>
-                </div>
+        <!-- Stats Cards -->
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3>Usuarios Registrados</h3>
+                <div class="stat-value" id="userCount"></div>
             </div>
-            </div>
-            </div>
-            <!-- Paneles de Funcionalidades -->
-            <div class="panel-container" id="panelPrincipal">
-                <div class="panel-box" onclick="openPingModal()">
-                    <i class="fas fa-podcast"></i>
-                    <h3>Hacer Ping</h3>
-                </div>
-                <div class="panel-box" onclick="openPortScanModal()">
-                    <i class="fas fa-plug"></i>
-                    <h3>Escanear Puertos</h3>
+            <div class="stat-card devices-stat-card">
+                <h3>Dispositivos Detectados</h3>
+                <div class="stat-value" id="totalDevices">0</div>
+                <div class="device-status-container">
+                    <div class="device-status-item">
+                        <span class="status-indicator status-autorizado"></span>
+                        <span class="status-label">Autorizados:</span>
+                        <span class="status-count" id="autorizadosCount">0</span>
+                    </div>
+                    <div class="device-status-item">
+                        <span class="status-indicator status-desconocido"></span>
+                        <span class="status-label">Desconocidos:</span>
+                        <span class="status-count" id="desconocidosCount">0</span>
+                    </div>
                 </div>
             </div>
         </div>
-        `;
-        
-        // Actualizar enlaces de navegación
-        updateNavLinks('dashboardBtn');
-        
-        // Actualizar datos
-        updateDeviceTable();
-        updateStatCounts();
-        loadDeviceCount();
-    }
 
+        <!-- Paneles de Funcionalidades -->
+        <div class="panel-container" id="panelPrincipal">
+            <div class="panel-box" onclick="openPingModal()">
+                <i class="fas fa-podcast"></i>
+                <h3>Hacer Ping</h3>
+            </div>
+            <div class="panel-box" onclick="openPortScanModal()">
+                <i class="fas fa-plug"></i>
+                <h3>Escanear Puertos</h3>
+            </div>
+        </div>
+
+        <!-- Estado del Sistema -->
+        <h3 style="margin: 25px 0 15px 0; color: #2c3e50; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+            <i class="fas fa-server" style="color: #3498db; margin-right: 8px;"></i>Estado del Sistema
+        </h3>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+            <div style="background: white; border-radius: 8px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e0e0e0; border-top: 3px solid #9b59b6;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <i class="fas fa-brain" style="font-size: 22px; color: #9b59b6;"></i>
+                    <span style="font-weight: 600; color: #2c3e50; font-size: 14px;">Servidor ML</span>
+                </div>
+                <div id="mlStatus" style="font-size: 13px; color: #999;">Verificando...</div>
+            </div>
+            <div style="background: white; border-radius: 8px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e0e0e0; border-top: 3px solid #9b59b6;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <i class="fas fa-phone-alt" style="font-size: 22px; color: #9b59b6;"></i>
+                    <span style="font-weight: 600; color: #2c3e50; font-size: 14px;">VoIP Asterisk</span>
+                </div>
+                <div id="voipDashStatus" style="font-size: 13px; color: #999;">Verificando...</div>
+            </div>
+            <div style="background: white; border-radius: 8px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e0e0e0; border-top: 3px solid #9b59b6;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <i class="fas fa-wifi" style="font-size: 22px; color: #9b59b6;"></i>
+                    <span style="font-weight: 600; color: #2c3e50; font-size: 14px;">Red General</span>
+                </div>
+                <div id="networkDashStatus" style="font-size: 13px; color: #999;">Verificando...</div>
+            </div>
+        </div>
+    `;
+
+    updateNavLinks('dashboardBtn');
+    updateDeviceTable();
+    updateStatCounts();
+    loadDeviceCount();
+    checkSystemStatus();
+}
+        
+        
     // Cargar vista de tráfico de red
 function loadTrafficView() {
     document.getElementById('mainContent').innerHTML = `
@@ -2838,7 +2914,10 @@ function loadLogs() {
                 <select id="logFilter" onchange="onFilterChange()" class="form-select">
                     <option value="todos">Todos</option>
                     <option value="ping">Ping</option>
-                    <option value="escaneos">Escaneos</option>
+                    <option value="escaneos">Escaneos de puertos</option>
+                    <option value="dispositivos">Dispositivos</option>
+                    <option value="usuarios">Usuarios</option>
+                    <option value="qos">QoS</option>
                 </select>
             </div>
         </div>
@@ -2900,21 +2979,43 @@ function updateLogsTable(filterType = currentLogFilter) {
     }
 
     // Aplicar filtro según el tipo seleccionado
-    let filteredLogs = [];
+   let filteredLogs = [];
     
-    if (filterType === 'todos') {
-        filteredLogs = logsActividad;
-    } else if (filterType === 'ping') {
-        filteredLogs = logsActividad.filter(log => 
-            log.descripcion && log.descripcion.toLowerCase().includes('ping'));
-    } else if (filterType === 'escaneos') {
-        filteredLogs = logsActividad.filter(log => 
-            log.descripcion && (
-                log.descripcion.toLowerCase().includes('escan') || 
-                log.descripcion.toLowerCase().includes('puerto')
-            )
-        );
-    }
+if (filterType === 'todos') {
+    filteredLogs = logsActividad;
+} else if (filterType === 'ping') {
+    filteredLogs = logsActividad.filter(log => 
+        log.descripcion && log.descripcion.toLowerCase().includes('ping'));
+} else if (filterType === 'escaneos') {
+    filteredLogs = logsActividad.filter(log => 
+        log.descripcion && (
+            log.descripcion.toLowerCase().includes('escan') || 
+            log.descripcion.toLowerCase().includes('puerto')
+        )
+    );
+} else if (filterType === 'dispositivos') {
+    filteredLogs = logsActividad.filter(log =>
+        log.descripcion && (
+            log.descripcion.toLowerCase().includes('dispositivo') ||
+            log.descripcion.toLowerCase().includes('escaneo manual') ||
+            log.descripcion.toLowerCase().includes('mac') ||
+            log.descripcion.toLowerCase().includes('red')
+        )
+    );
+} else if (filterType === 'usuarios') {
+    filteredLogs = logsActividad.filter(log =>
+        log.descripcion && (
+            log.descripcion.toLowerCase().includes('usuario') ||
+            log.descripcion.toLowerCase().includes('creación') ||
+            log.descripcion.toLowerCase().includes('eliminación') ||
+            log.descripcion.toLowerCase().includes('edición')
+        )
+    );
+} else if (filterType === 'qos') {
+    filteredLogs = logsActividad.filter(log =>
+        log.descripcion && log.descripcion.toLowerCase().includes('qos')
+    );
+}
 
     // Generar HTML para la tabla
     let html = '';
@@ -3103,6 +3204,8 @@ function loadDispositivosView() {
             </thead>
             <tbody id="deviceTableBody"></tbody>
         </table>
+        
+        <div id="devicePaginationContainer" style="margin-top: 15px; text-align: center;"></div>
     `;
 
     updateNavLinks('dispositivosBtn');
@@ -3252,16 +3355,33 @@ function filtrarDispositivosPorEstado() {
         );
     }
     
+    currentDevicePage = 1;
     updateDeviceTable();
 }
 
+let currentDevicePage = 1;
+const devicesPerPage = 5;
 // Actualizar tabla de dispositivos
 function updateDeviceTable() {
-    let tableBody = document.getElementById('deviceTableBody');
+    const tableBody = document.getElementById('deviceTableBody');
+    const paginationContainer = document.getElementById('devicePaginationContainer');
     if (!tableBody) return;
 
+    if (dispositivosFiltrados.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No hay dispositivos</td></tr>';
+        if (paginationContainer) paginationContainer.innerHTML = '';
+        return;
+    }
+
+    // Paginación
+    const totalPages = Math.ceil(dispositivosFiltrados.length / devicesPerPage);
+    const start = (currentDevicePage - 1) * devicesPerPage;
+    const end = start + devicesPerPage;
+    const dispositivosToShow = dispositivosFiltrados.slice(start, end);
+
+    // Tabla
     let html = '';
-    for (let device of dispositivosFiltrados) {
+    for (let device of dispositivosToShow) {
         const fechaFormateada = new Date(device.ultimaConexion).toLocaleString();
         const estadoClass = device.estadoAutorizacion === 'AUTORIZADO'
             ? 'estado-autorizado' : 'estado-desconocido';
@@ -3284,8 +3404,49 @@ function updateDeviceTable() {
             </tr>
         `;
     }
+    tableBody.innerHTML = html;
 
-    tableBody.innerHTML = html || '<tr><td colspan="5" style="text-align:center;">No hay dispositivos</td></tr>';
+    // Paginación
+    if (!paginationContainer) return;
+
+    let paginationHTML = `
+        <span style="margin-right: 15px; color: #666; font-size: 14px;">
+            Mostrando ${start + 1}-${Math.min(end, dispositivosFiltrados.length)} de ${dispositivosFiltrados.length} dispositivos
+        </span>
+    `;
+
+    if (currentDevicePage > 1) {
+        paginationHTML += `<button onclick="changeDevicePage(1)" class="btn pagination-button" title="Primera">
+            <i class="fas fa-angle-double-left"></i></button>`;
+        paginationHTML += `<button onclick="changeDevicePage(${currentDevicePage - 1})" class="btn pagination-button">
+            <i class="fas fa-angle-left"></i> Anterior</button>`;
+    }
+
+    const maxButtons = 5;
+    let startPage = Math.max(1, currentDevicePage - Math.floor(maxButtons / 2));
+    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+    if (endPage - startPage < maxButtons - 1) startPage = Math.max(1, endPage - maxButtons + 1);
+
+    for (let i = startPage; i <= endPage; i++) {
+        const activeClass = i === currentDevicePage ? 'btn-primary' : '';
+        paginationHTML += `<button onclick="changeDevicePage(${i})" class="btn pagination-button ${activeClass}">${i}</button>`;
+    }
+
+    if (currentDevicePage < totalPages) {
+        paginationHTML += `<button onclick="changeDevicePage(${currentDevicePage + 1})" class="btn pagination-button">
+            Siguiente <i class="fas fa-angle-right"></i></button>`;
+        paginationHTML += `<button onclick="changeDevicePage(${totalPages})" class="btn pagination-button" title="Última">
+            <i class="fas fa-angle-double-right"></i></button>`;
+    }
+
+    paginationContainer.innerHTML = paginationHTML;
+}
+
+function changeDevicePage(page) {
+    currentDevicePage = page;
+    updateDeviceTable();
+    const table = document.getElementById('deviceTableBody');
+    if (table) table.parentElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Evento para cargar dispositivos cuando se carga el DOM
@@ -3390,19 +3551,40 @@ function updateUserTable() {
 
     // 1. Aplicar el filtro
     let filteredLogs = [];
-    if (filterType === 'todos') {
-        filteredLogs = logsActividad;
-    } else if (filterType === 'ping') {
-        filteredLogs = logsActividad.filter(log => 
-            log.descripcion && log.descripcion.toLowerCase().includes('ping'));
-    } else if (filterType === 'escaneos') {
-        filteredLogs = logsActividad.filter(log => 
-            log.descripcion && (
-                log.descripcion.toLowerCase().includes('escan') || 
-                log.descripcion.toLowerCase().includes('puerto')
-            )
-        );
-    }
+if (filterType === 'todos') {
+    filteredLogs = logsActividad;
+} else if (filterType === 'ping') {
+    filteredLogs = logsActividad.filter(log => 
+        log.descripcion && log.descripcion.toLowerCase().includes('ping'));
+} else if (filterType === 'escaneos') {
+    filteredLogs = logsActividad.filter(log => 
+        log.descripcion && (
+            log.descripcion.toLowerCase().includes('escan') || 
+            log.descripcion.toLowerCase().includes('puerto')
+        )
+    );
+} else if (filterType === 'dispositivos') {
+    filteredLogs = logsActividad.filter(log =>
+        log.descripcion && (
+            log.descripcion.toLowerCase().includes('dispositivo') ||
+            log.descripcion.toLowerCase().includes('escaneo manual') ||
+            log.descripcion.toLowerCase().includes('mac') ||
+            log.descripcion.toLowerCase().includes('red')
+        )
+    );
+} else if (filterType === 'usuarios') {
+    filteredLogs = logsActividad.filter(log =>
+        log.descripcion && (
+            log.descripcion.toLowerCase().includes('creación de usuario') ||
+            log.descripcion.toLowerCase().includes('eliminación de usuario') ||
+            log.descripcion.toLowerCase().includes('edición de usuario')
+        )
+    );
+} else if (filterType === 'qos') {
+    filteredLogs = logsActividad.filter(log =>
+        log.descripcion && log.descripcion.toLowerCase().includes('medición qos')
+    );
+}
 
     // 2. Calcular paginación
     const totalPages = Math.ceil(filteredLogs.length / logsPerPage);
@@ -3460,6 +3642,180 @@ function updateUserTable() {
         if(userCount) userCount.textContent = users.length;
     }
 
+function loadOptimizacionView() {
+    document.getElementById('mainContent').innerHTML = `
+        <h2><i class="fas fa-calculator" style="color: #e74c3c; margin-right: 10px;"></i>Optimización de Recursos</h2>
+
+        <!-- Planteamiento del modelo -->
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #e0e0e0;">
+            <h3 style="margin-bottom: 15px; color: #2c3e50;">📐 Planteamiento del Modelo</h3>
+            <p style="color: #555; margin-bottom: 15px; line-height: 1.7;">
+                El sistema de monitoreo recopila eventos de red en tiempo real. El problema consiste en 
+                determinar cuántos eventos de cada tipo puede procesar el sistema de forma óptima, 
+                maximizando la eficiencia total sin exceder la capacidad disponible.
+            </p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 15px;">
+                <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #e74c3c;">
+                    <strong style="color: #e74c3c;">Variables de decisión</strong>
+                    <p style="margin-top: 8px; font-family: monospace; font-size: 14px; color: #333;">
+                        x₁ = eventos críticos<br>x₂ = eventos medios<br>x₃ = eventos bajos
+                    </p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #3498db;">
+                    <strong style="color: #3498db;">Función objetivo</strong>
+                    <p style="margin-top: 8px; font-family: monospace; font-size: 14px; color: #333;">Max Z = 5x₁ + 3x₂ + x₃</p>
+                    <p style="font-size: 12px; color: #666; margin-top: 5px;">Críticos valen 5 · Medios valen 3 · Bajos valen 1</p>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #27ae60;">
+                    <strong style="color: #27ae60;">Restricciones</strong>
+                    <p style="margin-top: 8px; font-family: monospace; font-size: 14px; color: #333;">
+                        x₁ + x₂ + x₃ ≤ 100<br>2x₁ + x₂ + 0.5x₃ ≤ 120<br>x₁, x₂, x₃ ≥ 0
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Datos reales del sistema -->
+        <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #e0e0e0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="color: #2c3e50;">📊 Clasificación de Eventos del Sistema</h3>
+                <button onclick="ejecutarModelo()" class="btn btn-success">
+                    <i class="fas fa-play"></i> Ejecutar Modelo
+                </button>
+            </div>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">Los eventos se clasifican automáticamente.</p>
+            <div class="stats-container" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="stat-card" style="border-left-color: #e74c3c;">
+                    <h3>🔴 Eventos Críticos (x₁)</h3>
+                    <div class="stat-value" id="x1Value" style="color: #e74c3c;">—</div>
+                    <div id="x1Detalle" style="font-size: 12px; color: #999; margin-top: 8px;"></div>
+                </div>
+                <div class="stat-card" style="border-left-color: #f39c12;">
+                    <h3>🟡 Eventos Medios (x₂)</h3>
+                    <div class="stat-value" id="x2Value" style="color: #f39c12;">—</div>
+                    <div id="x2Detalle" style="font-size: 12px; color: #999; margin-top: 8px;"></div>
+                </div>
+                <div class="stat-card" style="border-left-color: #27ae60;">
+                    <h3>🟢 Eventos Bajos (x₃)</h3>
+                    <div class="stat-value" id="x3Value" style="color: #27ae60;">—</div>
+                    <div id="x3Detalle" style="font-size: 12px; color: #999; margin-top: 8px;">Pings, Gestión usuarios</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resultado del modelo -->
+        <div id="resultadoModelo" style="display: none;">
+            <div style="background: white; padding: 25px; border-radius: 8px; border: 1px solid #e0e0e0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <h3 style="color: #2c3e50; margin-bottom: 20px;">🔢 Solución Óptima</h3>
+
+                <div class="stats-container" style="grid-template-columns: repeat(2, 1fr); margin-bottom: 20px;">
+                    <div class="stat-card" style="border-left-color: #9b59b6;">
+                        <h3>Valor de Z (Eficiencia)</h3>
+                        <div class="stat-value" id="zValue" style="color: #9b59b6;">—</div>
+                        <div style="font-size: 13px; color: #666; margin-top: 5px;">Máximo valor alcanzable</div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: #1abc9c;">
+                        <h3>Estado del Sistema</h3>
+                        <div class="stat-value" id="estadoSistema" style="font-size: 18px; margin-top: 5px;">—</div>
+                    </div>
+                </div>
+
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 12px; color: #2c3e50;">✅ Verificación de Restricciones</h4>
+                    <div id="restriccionesResult"></div>
+                </div>
+
+                <div id="interpretacionResult" style="padding: 15px; border-radius: 8px; border-left: 4px solid #3498db; background: #eaf4fb;"></div>
+            </div>
+        </div>
+    `;
+
+    updateNavLinks('optimizacionBtn');
+    cargarDatosReales();
+}
+
+function cargarDatosReales() {
+    fetch('/api/optimizacion/datos')
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error cargando datos:', data.error);
+                return;
+            }
+
+            document.getElementById('x1Value').textContent = data.x1;
+            document.getElementById('x2Value').textContent = data.x2;
+            document.getElementById('x3Value').textContent = data.x3;
+
+            document.getElementById('x1Detalle').textContent =
+                `Dispositivos desconocidos (${data.dispositivosDesconocidos}), QoS malo (${data.qosMalos})`;
+
+            document.getElementById('x2Detalle').textContent =
+                `QoS normales (${data.qosMedios}), Escaneos/MAC (${data.eventosMedios})`;
+        })
+        .catch(err => console.error('Error en /datos:', err));
+}
+
+async function ejecutarModelo() {
+
+    const btn = document.querySelector('button[onclick="ejecutarModelo()"]');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Ejecutando...';
+
+    try {
+        const response = await fetch('/api/optimizacion');
+        const data = await response.json();
+
+        // data.resultado es el string JSON que devolvió Python → lo parseamos
+        const resultado = JSON.parse(data.resultado);
+
+        if (!resultado.success) {
+            alert('El modelo no encontró solución: ' + resultado.error);
+            return;
+        }
+
+        // Mostrar sección de resultados
+        document.getElementById('resultadoModelo').style.display = 'block';
+
+        // Z y estado
+        document.getElementById('zValue').textContent = resultado.z;
+        document.getElementById('estadoSistema').textContent = resultado.estado;
+
+        // Verificación de restricciones
+        const r1Ok = resultado.r1 <= 100;
+        const r2Ok = resultado.r2 <= 120;
+
+        document.getElementById('restriccionesResult').innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 8px; font-family: monospace; font-size: 14px;">
+                <div style="color: ${r1Ok ? '#27ae60' : '#e74c3c'};">
+                    ${r1Ok ? '✅' : '❌'} R1: x₁ + x₂ + x₃ = ${resultado.r1} ≤ 100
+                </div>
+                <div style="color: ${r2Ok ? '#27ae60' : '#e74c3c'};">
+                    ${r2Ok ? '✅' : '❌'} R2: 2x₁ + x₂ + 0.5x₃ = ${resultado.r2} ≤ 120
+                </div>
+                <div style="margin-top: 8px; color: #555;">
+                    Procesados → Críticos: <strong>${resultado.x1}</strong> | 
+                    Medios: <strong>${resultado.x2}</strong> | 
+                    Bajos: <strong>${resultado.x3}</strong>
+                </div>
+            </div>
+        `;
+
+        // Interpretación
+        document.getElementById('interpretacionResult').innerHTML = `
+            <strong style="color: #2c3e50;">📋 Interpretación:</strong>
+            <p style="margin-top: 8px; color: #333;">${resultado.interpretacion}</p>
+        `;
+
+    } catch (error) {
+        console.error('Error ejecutando modelo:', error);
+        alert('Error ejecutando el modelo de optimización. Revisa la consola.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-play"></i> Ejecutar Modelo';
+    }
+}
+    
 // Variables para el gráfico de tráfico
 let trafficChart = null;
 const maxDataPoints = 30;
@@ -3607,7 +3963,8 @@ function connectEventSource() {
     };
 }
 
-// Función para inicializar el monitoreo de red
+
+
 // Función para inicializar el monitoreo de red
 function initNetworkMonitoring() {
     console.log("Inicializando monitoreo de red...");
@@ -4328,9 +4685,76 @@ window.onclick = function(event) {
         }
     });
 }
+
+function loadPowerBIDashboard() {
+    document.getElementById('mainContent').innerHTML = `
+        <h2><i class="fas fa-chart-pie" style="color: #e74c3c; margin-right: 10px;"></i>Dashboard de Monitoreo</h2>
+        <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
+            Visualización en tiempo real conectada a la base de datos ShieldNet.
+        </p>
+        <div style="border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+            <iframe 
+                title="ShieldNet Dashboard"
+                width="100%" 
+                height="650px"
+                src="https://app.powerbi.com/view?r=eyJrIjoiY2I4ZDM4YWYtNzAxYy00NzBiLWJkMjAtY2UxY2ZkYTcwZjYzIiwidCI6IjlkMTJiZjNmLWU0ZjYtNDdhYi05MTJmLTFhMmYwZmM0OGFhNCIsImMiOjR9"
+                frameborder="0" 
+                allowfullscreen="true"
+                style="border: none; display: block;">
+            </iframe>
+        </div>
+    `;
+    updateNavLinks('dashboardPBIBtn');
+}
+
+function checkSystemStatus() {
+    // Estado ML
+    fetch('http://localhost:5050/health', { mode: 'no-cors' })
+        .then(() => {
+            const el = document.getElementById('mlStatus');
+            if (el) el.innerHTML = '🟢 <strong style="color:#27ae60;">En línea</strong>';
+        })
+        .catch(() => {
+            const el = document.getElementById('mlStatus');
+            if (el) el.innerHTML = '🔴 <strong style="color:#e74c3c;">Fuera de línea</strong>';
+        });
+
+    // Estado VoIP
+    fetch('/api/voip/status')
+        .then(r => r.json())
+        .then(data => {
+            const el = document.getElementById('voipDashStatus');
+            if (el) el.innerHTML = data.status === 'online'
+                ? '🟢 <strong style="color:#27ae60;">En línea</strong>'
+                : '🔴 <strong style="color:#e74c3c;">Fuera de línea</strong>';
+        })
+        .catch(() => {
+            const el = document.getElementById('voipDashStatus');
+            if (el) el.innerHTML = '⚠️ <strong style="color:#f39c12;">Sin respuesta</strong>';
+        });
+
+    // Estado Red
+    fetch('/api/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip: '8.8.8.8' })
+    })
+        .then(r => r.json())
+        .then(data => {
+            const el = document.getElementById('networkDashStatus');
+            if (el) el.innerHTML = data.output && !data.output.includes('Error')
+                ? '🟢 <strong style="color:#27ae60;">Conectada</strong>'
+                : '🔴 <strong style="color:#e74c3c;">Sin conexión</strong>';
+        })
+        .catch(() => {
+            const el = document.getElementById('networkDashStatus');
+            if (el) el.innerHTML = '⚠️ <strong style="color:#f39c12;">Sin respuesta</strong>';
+        });
+}
+
 </script>
 <footer style="margin-top: 20px; text-align: center; font-size: 14px; color: var(--primary-color); padding: 20px 0;">
-    <p>&copy; 2025 ShieldNet. Todos los derechos reservados.</p>
+    <p>&copy; 2026 ShieldNet. Todos los derechos reservados.</p>
 </footer>
 </body>
 </html>

@@ -3,7 +3,6 @@ package com.example.security.controller;
 import com.example.security.modelo.Evento;
 import com.example.security.dto.EventoDTO;
 import com.example.security.servicios.EventoService;
-import com.example.security.modelo.Usuario;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,9 +17,6 @@ public class EventoController {
     @Autowired
     private EventoService eventoService;
 
-    /**
-     * Obtiene todos los logs de eventos
-     */
     @GetMapping
     public ResponseEntity<List<Evento>> getAllEvents() {
         List<Evento> eventos = eventoService.findAll();
@@ -28,12 +24,12 @@ public class EventoController {
     }
 
     /**
-     * Registra un nuevo evento
+     * Corregido: ya no recibe Usuario como parámetro.
+     * EventoService obtiene el usuario autenticado internamente.
      */
     @PostMapping("/registre")
-    public ResponseEntity<Evento> registrarEvento(@RequestBody EventoDTO eventoDTO, Usuario usuarioAutenticado) {
-        Evento nuevoEvento = eventoService.registrarEvento(eventoDTO, usuarioAutenticado);
+    public ResponseEntity<Evento> registrarEvento(@RequestBody EventoDTO eventoDTO) {
+        Evento nuevoEvento = eventoService.registrarEvento(eventoDTO.getDescripcion());
         return new ResponseEntity<>(nuevoEvento, HttpStatus.CREATED);
     }
-
 }

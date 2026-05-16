@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
+<head> 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ShieldNet | Panel de Usuario</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         :root {
             --primary-color: #2c3e50;
@@ -38,12 +39,14 @@
         .header {
             display: flex;
             justify-content: space-between;
-            padding: 20px;
-            background-color: white;
+            padding: 20px 25px;
+            background: linear-gradient(135deg, #1a2a3a 0%, #2c3e50 30%, #2980b9 100%);
             border-radius: var(--border-radius);
             margin-bottom: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            border: 1px solid #e0e0e0;
+            box-shadow: 0 4px 15px rgba(41, 128, 185, 0.3);
+            border: none;
+            border-top: 3px solid #3498db;
+            align-items: center;
         }
 
         .logo-container {
@@ -54,8 +57,11 @@
 
         .header h1 {
             font-size: 24px;
-            color: var(--primary-color);
+            color: white;
+            font-weight: 700;
+            letter-spacing: 1px;
         }
+
 
         .user-info {
             display: flex;
@@ -64,8 +70,9 @@
 
         .user-info span {
             margin-right: 20px;
-            color: var(--primary-color);
+            color: rgba(255, 255, 255, 0.85);
             font-weight: 500;
+            font-size: 14px;
         }
 
         .user-actions {
@@ -106,6 +113,23 @@
 
         .logout-btn i, .profile-btn i {
             margin-right: 8px;
+
+        }
+
+        .profile-btn:hover, .logout-btn:hover {
+            background-color: rgba(255, 255, 255, 0.22);
+        }
+
+        .profile-btn, .logout-btn {
+            background-color: rgba(255, 255, 255, 0.12);
+            color: white;
+            padding: 10px 15px;
+            border-radius: var(--border-radius);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            transition: background-color 0.3s;
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         /* Layout */
@@ -710,22 +734,23 @@
         }
         /* CSS - Agregar estas reglas a tu sección de estilos */
 .stats-container {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 20px;
     margin-bottom: 25px;
 }
 
 .panel-container {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 20px;
-    max-width: 300px;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
 }
 
 .panel-box {
-    width: 250px;
-    min-width: 250px;
+    width: 200px;
+    min-width: 200px;
     padding: 25px;
     background-color: white;
     border-radius: var(--border-radius);
@@ -735,6 +760,36 @@
     text-align: center;
     transition: all 0.3s;
 }
+
+.sidebar-group-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #aab4be;
+    letter-spacing: 1.2px;
+    padding: 16px 15px 6px 15px;
+    margin-top: 4px;
+}
+
+.icon-dashboard { color: #3498db; }
+.icon-traffic   { color: #2ecc71; }
+.icon-devices   { color: #f39c12; }
+.icon-qos       { color: #e74c3c; }
+.icon-logs      { color: #e67e22; }
+
+.sidebar .nav-link.active i { color: white; }
+
+.qos-status-badge {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: bold;
+}
+.qos-status-badge.excelente { background-color: rgba(39,174,96,0.15); color: #27ae60; }
+.qos-status-badge.bueno     { background-color: rgba(52,152,219,0.15); color: #3498db; }
+.qos-status-badge.aceptable { background-color: rgba(243,156,18,0.15); color: #f39c12; }
+.qos-status-badge.malo      { background-color: rgba(230,126,34,0.15); color: #e67e22; }
+.qos-status-badge.muy-malo  { background-color: rgba(231,76,60,0.15);  color: #e74c3c; }
 </style>
 </head>
 <body>
@@ -742,69 +797,125 @@
 <div class="container">
     <!-- Header -->
     <div class="header">
-        <div class="logo-container">
-            <img src="/img/logo-shieldnet.svg" alt="Logo ShieldNet" style="height: 75px;">
+    <div class="logo-container">
+        <img src="/img/logo-shieldnet.svg" alt="Logo ShieldNet" style="height: 75px; filter: brightness(0) invert(1);">
+        <div>
             <h1>ShieldNet</h1>
         </div>
-        <div class="user-info">
-            <span id="welcomeMessage">Bienvenido, <span id="userName">Usuario</span></span>
-            <div class="user-actions">
-                <a href="#" class="profile-btn" onclick="openUserProfileModal()">
-                    <i class="fas fa-user-edit"></i> Mi Perfil
-                </a>
-                <a href="/logout" class="logout-btn">
-                    <span class="login-icon">
-                        <span class="doorframe"></span>
-                        <span class="door"></span>
-                        <span class="person"><i class="fas fa-user"></i></span>
-                    </span>
-                    Cerrar sesión
-                </a>
-            </div>
+    </div>
+    <div class="user-info">
+        <span id="welcomeMessage">Bienvenido, <span id="userName">Usuario</span></span>
+        <div class="user-actions">
+            <a href="#" class="profile-btn" onclick="openUserProfileModal()">
+                <i class="fas fa-user-edit"></i> Mi Perfil
+            </a>
+            <a href="/logout" class="logout-btn">
+                <span class="login-icon">
+                    <span class="doorframe"></span>
+                    <span class="door"></span>
+                    <span class="person"><i class="fas fa-user"></i></span>
+                </span>
+                Cerrar sesión
+            </a>
         </div>
     </div>
+</div>
 
     <!-- Content Wrapper -->
     <div class="content-wrapper">
         <!-- Sidebar -->
         <div class="sidebar">
             <a href="#" class="nav-link active" id="dashboardBtn">
-                <i class="fas fa-tachometer-alt"></i> Panel Principal
+                <i class="fas fa-tachometer-alt icon-dashboard"></i> Panel Principal
             </a>
+
+            <div class="sidebar-group-label">MONITOREO</div>
+            <a href="#" class="nav-link" id="trafficBtn">
+                <i class="fas fa-chart-line icon-traffic"></i> Tráfico de Red
+            </a>
+            <a href="#" class="nav-link" id="dispositivosBtn">
+                <i class="fas fa-network-wired icon-devices"></i> Dispositivos
+            </a>
+            <a href="#" class="nav-link" id="qosBtn">
+                <i class="fas fa-heartbeat icon-qos"></i> Calidad de Servicio
+            </a>
+
+            <div class="sidebar-group-label">GESTION</div>
             <a href="#" class="nav-link" id="logsBtn">
-                <i class="fas fa-clipboard-list"></i> Logs de Actividad
+                <i class="fas fa-clipboard-list icon-logs"></i> Mis Logs
+            </a>
+            <a href="#" class="nav-link" id="dashboardPBIBtn">
+                <i class="fas fa-chart-pie icon-qos"></i> Dashboard Power BI
             </a>
         </div>
 
         <!-- Main Content -->
+<!-- Main Content -->
 <div class="main-content" id="mainContent">
     <h2>Panel Principal</h2>
-    
-    <!-- Stats Cards -->
+
+    <!-- Fila 1: Stats -->
     <div class="stats-container">
         <div class="stat-card">
             <h3>Usuarios Registrados</h3>
             <div class="stat-value" id="userCount"></div>
         </div>
-        <div class="stat-card">
-            <h3>Tráfico de Red</h3>
-            <div class="stat-value" id="traffic-mb">0 MB</div>
-            <div class="traffic-actions" style="margin-top: 15px; display: flex; gap: 10px; justify-content: center;">
-                <button onclick="startTrafficCapture()" class="btn btn-success" style="font-size: 14px; padding: 8px 12px;">
-                    <i class="fas fa-play"></i> Iniciar
-                </button>
-                <button onclick="resetTrafficCounter()" class="btn btn-primary" style="font-size: 14px; padding: 8px 12px;">
-                    <i class="fas fa-redo"></i> Reiniciar
-                </button>
-                <button onclick="stopTrafficCapture()" class="btn btn-danger" style="font-size: 14px; padding: 8px 12px;">
-                    <i class="fas fa-stop"></i> Detener
-                </button>
+
+        <!-- Dispositivos -->
+        <div class="stat-card" style="border-left-color: #f39c12;">
+            <h3>Dispositivos en Red</h3>
+            <div class="stat-value" id="userTotalDevices" style="color: #f39c12;">—</div>
+            <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; align-items: center; font-size: 14px;">
+                    <span style="width: 10px; height: 10px; border-radius: 50%; background: #27ae60; display: inline-block; margin-right: 8px;"></span>
+                    <span style="flex: 1; color: #555;">Autorizados:</span>
+                    <strong id="userAutorizados">—</strong>
+                </div>
+                <div style="display: flex; align-items: center; font-size: 14px;">
+                    <span style="width: 10px; height: 10px; border-radius: 50%; background: #f39c12; display: inline-block; margin-right: 8px;"></span>
+                    <span style="flex: 1; color: #555;">Desconocidos:</span>
+                    <strong id="userDesconocidos">—</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Último QoS -->
+        <div class="stat-card" style="border-left-color: #e74c3c;">
+            <h3>Último QoS</h3>
+            <div class="stat-value" id="userMosScore" style="color: #e74c3c;">—</div>
+            <div style="margin-top: 8px;">
+                <span id="userQosStatus" style="font-size: 13px; color: #666;">Sin datos</span>
             </div>
         </div>
     </div>
-    
-    <!-- Paneles de Funcionalidades -->
-    <div class="panel-container" id="panelPrincipal">
+
+    <!-- Fila 2: Estado del sistema + Hacer Ping -->
+    <h3 style="margin: 10px 0 15px 0; color: #2c3e50; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+        <i class="fas fa-server" style="color: #3498db; margin-right: 8px;"></i>Estado de la Red
+    </h3>
+
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 25px;">
+        <!-- Conexión a Internet -->
+        <div style="background: white; border-radius: 8px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e0e0e0; border-top: 3px solid #3498db;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <i class="fas fa-wifi" style="font-size: 22px; color: #3498db;"></i>
+                <span style="font-weight: 600; color: #2c3e50; font-size: 14px;">Conexión a Internet</span>
+            </div>
+            <div id="userNetworkStatus" style="font-size: 13px; color: #999;">Verificando...</div>
+        </div>
+
+        <!-- Calidad de servicio general -->
+        <div style="background: white; border-radius: 8px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e0e0e0; border-top: 3px solid #e74c3c;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <i class="fas fa-heartbeat" style="font-size: 22px; color: #e74c3c;"></i>
+                <span style="font-weight: 600; color: #2c3e50; font-size: 14px;">Calidad de Servicio</span>
+            </div>
+            <div id="userQosGeneral" style="font-size: 13px; color: #999;">Verificando...</div>
+        </div>
+    </div>
+
+    <!-- Acción: Hacer Ping -->
+    <div class="panel-container" id="panelPrincipal" style="max-width: 300px;">
         <div class="panel-box" onclick="openPingModal()">
             <i class="fas fa-podcast"></i>
             <h3>Hacer Ping</h3>
@@ -902,6 +1013,88 @@
     <div id="logsEmptyMsg" style="margin-top: 20px; color: #888;"></div>
     <div id="paginationContainer" style="margin-top: 15px; text-align: center;"></div>
 </div>
+
+<!-- Tráfico de Red -->
+<div class="main-content" id="trafficContent" style="display: none;">
+    <h2><i class="fas fa-chart-line" style="color: #2ecc71; margin-right: 10px;"></i>Tráfico de Red</h2>
+
+    <div class="stat-card" style="margin-bottom: 20px;">
+        <h3>Velocidad actual</h3>
+        <div class="stat-value" id="traffic-mb">0.00 MB/s</div>
+        <div style="margin-top: 15px; display: flex; gap: 10px;">
+            <button onclick="startUserTraffic()" class="btn btn-success" style="font-size: 14px; padding: 8px 12px;">
+                <i class="fas fa-play"></i> Iniciar
+            </button>
+            <button onclick="stopUserTraffic()" class="btn btn-danger" style="font-size: 14px; padding: 8px 12px;">
+                <i class="fas fa-stop"></i> Detener
+            </button>
+            <button onclick="resetUserTraffic()" class="btn btn-primary" style="font-size: 14px; padding: 8px 12px;">
+                <i class="fas fa-redo"></i> Reiniciar
+            </button>
+        </div>
+    </div>  <!-- cierra stat-card -->
+
+    <div style="position: relative; height: 300px; background: white; border-radius: var(--border-radius); padding: 15px; border: 1px solid #e0e0e0;">
+        <canvas id="trafficChart"></canvas>
+    </div>
+
+    <div class="stats-container" style="margin-top: 20px;">
+        <div class="stat-card"><h3>HTTP/HTTPS</h3><div class="stat-value" id="httpSpeed">0.00 MB/s</div></div>
+        <div class="stat-card"><h3>VoIP</h3><div class="stat-value" id="voipSpeed">0.00 MB/s</div></div>
+        <div class="stat-card"><h3>Streaming</h3><div class="stat-value" id="streamingSpeed">0.00 MB/s</div></div>
+        <div class="stat-card"><h3>Otros</h3><div class="stat-value" id="otherSpeed">0.00 MB/s</div></div>
+    </div>
+</div>
+
+<!-- Dispositivos (solo lectura) -->
+<div class="main-content" id="dispositivosContent" style="display: none;">
+    <h2><i class="fas fa-network-wired" style="color: #f39c12; margin-right: 10px;"></i>Dispositivos Detectados</h2>
+    <p style="color: #666; margin-bottom: 20px; font-size: 14px;">
+        <i class="fas fa-info-circle"></i> Vista de solo lectura. Contacta al administrador para gestionar dispositivos.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>IP</th>
+                <th>MAC</th>
+                <th>Última Conexión</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody id="dispositivosTableBody">
+            <tr><td colspan="4" style="text-align:center;">Cargando...</td></tr>
+        </tbody>
+    </table>
+
+    <div id="dispositivosPaginationContainer" style="margin-top: 15px; text-align: center;"></div>
+
+</div>
+
+<!-- QoS (solo historial) -->
+<div class="main-content" id="qosContent" style="display: none;">
+    <h2><i class="fas fa-heartbeat" style="color: #e74c3c; margin-right: 10px;"></i>Calidad de Servicio (QoS)</h2>
+    <p style="color: #666; margin-bottom: 20px; font-size: 14px;">
+        <i class="fas fa-info-circle"></i> Solo visualización del historial. Las mediciones las realiza el administrador.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>IP</th>
+                <th>Fecha/Hora</th>
+                <th>Latencia (ms)</th>
+                <th>Jitter (ms)</th>
+                <th>Pérdida (%)</th>
+                <th>MOS Score</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody id="qosTableBody">
+            <tr><td colspan="7" style="text-align:center;">Cargando...</td></tr>
+        </tbody>
+    </table>
+    <div id="qosPaginationContainer" style="margin-top: 15px; text-align: center;"></div>
+</div>
+
 <script>
 
     let logsActividad = [];
@@ -961,163 +1154,17 @@ document.getElementById('pingForm').addEventListener('submit', function(e) {
     executePing();
 });
 
-// Función para cargar la cantidad de usuarios
-function loadUserCount() {
-    fetch('/api/usuarios')
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('userCount').textContent = data.length;
-        })
-        .catch(() => {
-            document.getElementById('userCount').textContent = 'Error';
-        });
-}
+
 
 // Llama a la función cuando cargue la página
 document.addEventListener('DOMContentLoaded', function() {
     loadUserCount();
     getCurrentUserIdAndLoadProfile();
+    loadUserDashboardData();
 });
 
-// Tráfico de red
-let eventSource = null;
 
-document.addEventListener('DOMContentLoaded', function() {
-    initNetworkMonitoring();
-});
 
-function initNetworkMonitoring() {
-    const trafficMbElement = document.getElementById('traffic-mb');
-    if (!trafficMbElement) {
-        console.error('No se encontró el elemento con ID "traffic-mb"');
-        return;
-    }
-    // Obtener datos actuales
-    fetch('/api/network/data')
-        .then(response => response.json())
-        .then(data => {
-            trafficMbElement.innerText = data.megabytes.toFixed(2) + " MB";
-            // Iniciar conexión SSE automáticamente
-            connectEventSource();
-            startTrafficCapture()
-        })
-        .catch(error => {
-            trafficMbElement.innerText = "0.00 MB";
-            console.warn('Error al obtener datos iniciales:', error);
-        });
-}
-
-// Función para resetear el contador de tráfico
-function resetTrafficCounter() {
-    fetch('/api/network/reset', {
-        method: 'POST'
-    })
-    .then(response => response.text())
-    .then(message => {
-        console.log(message);
-        document.getElementById('traffic-mb').innerText = "0.00 MB";
-    })
-    .catch(error => {
-        console.error('Error al resetear:', error);
-    });
-}
-
-// Función para detener la captura de tráfico
-function stopTrafficCapture() {
-    fetch('/api/network/stop', {
-        method: 'POST'
-    })
-    .then(response => response.text())
-    .then(message => {
-        console.log(message);
-        if (eventSource) {
-            eventSource.close();
-            eventSource = null;
-        }
-    })
-    .catch(error => {
-        console.error('Error al detener:', error);
-    });
-}
-
-// Función corregida para iniciar captura
-function startTrafficCapture() {
-    if (eventSource) {
-        eventSource.close();
-        eventSource = null; // Era: fuente del evento = nulo;
-    }
-    
-    fetch('/api/network/start', {
-        method: 'POST' // Era: método: 'POST'
-    })
-    .then(response => response.text()) // Era: respuesta.text()
-    .then(message => {
-        console.log(message);
-        connectEventSource();
-    })
-    .catch(error => {
-        console.error('Error al iniciar la captura:', error);
-    });
-}
-
-// Función corregida para conectar EventSource
-function connectEventSource() {
-    eventSource = new EventSource("/api/network/monitor");
-    
-    eventSource.onmessage = function(event) { // Era: función (evento)
-        const trafficMbElement = document.getElementById('traffic-mb'); // Era: tráficoMbElement
-        if (!trafficMbElement) return;
-        
-        try {
-            const data = JSON.parse(event.data); // Era: datos
-            if (data.mb) {
-                trafficMbElement.innerText = data.mb + " MB"; // Era: datos.mb
-                return;
-            }
-        } catch(error) {
-            const message = event.data; // Era: Event.data
-            if (message.includes("MB")) {
-                trafficMbElement.innerText = message; // Era: TrafficMbElement
-            } else {
-                const match = message.match(/(\d+\.\d+)/); // Era: Match
-                if (match && match[1]) {
-                    trafficMbElement.innerText = match[1] + " MB"; // Era: coincidencia
-                } else {
-                    trafficMbElement.innerText = message;
-                }
-            }
-        }
-    };
-    
-    eventSource.onerror = function(error) { // Era: origen del evento.onerror
-        console.error('Error en EventSource:', error);
-        if (eventSource) {
-            eventSource.close();
-            eventSource = null; // Era: fuente del evento = nulo;
-            setTimeout(connectEventSource, 5000);
-        }
-    };
-}
-
-// Función corregida para inicializar monitoreo
-function initNetworkMonitoring() {
-    const trafficMbElement = document.getElementById('traffic-mb'); // Era: TrafficMbElement
-    if (!trafficMbElement) {
-        console.error('No se encontró el elemento con ID "traffic-mb"');
-        return; // Era: devolver;
-    }
-    
-    fetch('/api/network/data')
-    .then(response => response.json()) // Era: Response.json()
-    .then(data => {
-        trafficMbElement.innerText = data.megabytes.toFixed(2) + " MB"; // Era: TrafficMbElement
-        connectEventSource();
-    })
-    .catch(error => {
-        trafficMbElement.innerText = "0.00 MB";
-        console.warn('Error al obtener datos iniciales:', error);
-    });
-}
 
 // 3. CORRECCIÓN PARA CARGAR USUARIOS
 function loadUserCount() {
@@ -1128,31 +1175,6 @@ function loadUserCount() {
     })
     .catch(() => {
         document.getElementById('userCount').textContent = 'Error';
-    });
-}
-
-// 4. CORRECCIÓN PARA CARGAR LOGS
-function loadUserPings() {
-    fetch('/api/mis-pings')
-    .then(res => res.json()) // Era: .luego(res => res.json())
-    .then(logs => {
-        const tableBody = document.getElementById("logsTableBody");
-        const emptyMsg = document.getElementById("logsEmptyMsg"); // Era: vacíoMsg
-        
-        tableBody.innerHTML = "";
-        emptyMsg.textContent = ""; // Era: vacíoMsg.textContent
-        
-        if (!Array.isArray(logs) || logs.length === 0) {
-            emptyMsg.textContent = "No hay registros disponibles."; // Era: vacíoMsg
-            return;
-        }
-        
-        logsActividad = logs;
-        currentPage = 1;
-        updateLogsTable();
-    })
-    .catch(() => {
-        document.getElementById("logsEmptyMsg").textContent = "Error al cargar los registros.";
     });
 }
 
@@ -1167,12 +1189,6 @@ function getCurrentUserIdAndLoadProfile() {
             document.getElementById("userName").textContent = usuario.nombre || 'Usuario';
             loadUserProfile();
         });
-}
-
-function openUserProfileModal() {
-    document.getElementById("mainContent").style.display = "none";
-    document.getElementById("profileContent").style.display = "block";
-    document.getElementById("logsContent").style.display = "none"; 
 }
 
 function loadUserProfile() {
@@ -1238,11 +1254,6 @@ document.getElementById("profileForm").addEventListener("submit", function(e) {
 // Cargar perfil al mostrar la sección
 document.addEventListener('DOMContentLoaded', function() {
     getCurrentUserIdAndLoadProfile();
-});
-document.getElementById("dashboardBtn").addEventListener("click", function(e) {
-    e.preventDefault();
-    document.getElementById("mainContent").style.display = "block";
-    document.getElementById("profileContent").style.display = "none";
 });
 
 function loadUserPings() {
@@ -1320,42 +1331,531 @@ function loadUserPings() {
     updateLogsTable();
 }
 
+
+// ── NAVEGACIÓN ACTUALIZADA ─────────────────────────────
 function showSection(sectionId) {
-    document.getElementById("mainContent").style.display = "none";
-    document.getElementById("profileContent").style.display = "none";
-    document.getElementById("logsContent").style.display = "none";
-    document.getElementById(sectionId).style.display = "block";
+    const sections = ['mainContent','profileContent','logsContent',
+                      'trafficContent','dispositivosContent','qosContent','pbiContent'];
+    sections.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+    const target = document.getElementById(sectionId);
+    if (target) target.style.display = 'block';
 }
 
-function setActiveNav(section) {
-    document.getElementById("dashboardBtn").classList.remove("active");
-    document.getElementById("logsBtn").classList.remove("active");
-    if (section === "mainContent") {
-        document.getElementById("dashboardBtn").classList.add("active");
-    } else if (section === "logsContent") {
-        document.getElementById("logsBtn").classList.add("active");
-    }
+function setActiveNav(activeId) {
+    document.querySelectorAll('.sidebar .nav-link').forEach(l => l.classList.remove('active'));
+    if (activeId) document.getElementById(activeId)?.classList.add('active');
 }
 
-// Y luego usa showSection en los listeners:
-document.getElementById("dashboardBtn").addEventListener("click", function(e) {
+// Reemplaza los listeners anteriores de dashboardBtn y logsBtn con estos:
+document.getElementById('dashboardBtn').addEventListener('click', function(e) {
     e.preventDefault();
-    showSection("mainContent");
-    setActiveNav("mainContent");
+    showSection('mainContent');
+    setActiveNav('dashboardBtn');
 });
 
-document.getElementById("logsBtn").addEventListener("click", function(e) {
+document.getElementById('logsBtn').addEventListener('click', function(e) {
     e.preventDefault();
-    showSection("logsContent");
-    setActiveNav("logsContent");
+    showSection('logsContent');
+    setActiveNav('logsBtn');
     loadUserPings();
 });
 
+document.getElementById('trafficBtn').addEventListener('click', function(e) {
+    e.preventDefault();
+    showSection('trafficContent');
+    setActiveNav('trafficBtn');
+    initUserTrafficMonitor();
+});
+
+document.getElementById('dispositivosBtn').addEventListener('click', function(e) {
+    e.preventDefault();
+    showSection('dispositivosContent');
+    setActiveNav('dispositivosBtn');
+    loadDispositivosReadOnly();
+});
+
+document.getElementById('qosBtn').addEventListener('click', function(e) {
+    e.preventDefault();
+    showSection('qosContent');
+    setActiveNav('qosBtn');
+    loadQoSReadOnly();
+});
+
+document.getElementById('dashboardPBIBtn').addEventListener('click', function(e) {
+    e.preventDefault();
+    showSection('pbiContent');
+    setActiveNav('dashboardPBIBtn');
+});
+
 function openUserProfileModal() {
-    showSection("profileContent");
-    setActiveNav();
+    showSection('profileContent');
+    setActiveNav(null);
+}
+
+// ── TRÁFICO (solo lectura) ─────────────────────────────
+let userTrafficChart = null;
+let userEventSource = null;
+const maxPoints = 30;
+
+function initUserTrafficMonitor() {
+    // Destruir chart anterior
+    if (userTrafficChart) {
+        userTrafficChart.destroy();
+        userTrafficChart = null;
+    }
+
+    // Limpiar canvas completamente
+    const parent = document.getElementById('trafficChart').parentElement;
+    const oldCanvas = document.getElementById('trafficChart');
+    if (oldCanvas) oldCanvas.remove();
+
+    const newCanvas = document.createElement('canvas');
+    newCanvas.id = 'trafficChart';
+    parent.appendChild(newCanvas);
+
+    userTrafficChart = new Chart(newCanvas, {
+        type: 'line',
+        data: {
+            labels: Array(maxPoints).fill(''),
+            datasets: [
+                {
+                    label: 'HTTP/HTTPS',
+                    data: Array(maxPoints).fill(0),
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52,152,219,0.1)',
+                    tension: 0.4, fill: true, pointRadius: 0, borderWidth: 2
+                },
+                {
+                    label: 'VoIP',
+                    data: Array(maxPoints).fill(0),
+                    borderColor: '#27ae60',
+                    backgroundColor: 'rgba(39,174,96,0.1)',
+                    tension: 0.4, fill: true, pointRadius: 0, borderWidth: 2
+                },
+                {
+                    label: 'Streaming',
+                    data: Array(maxPoints).fill(0),
+                    borderColor: '#e74c3c',
+                    backgroundColor: 'rgba(231,76,60,0.1)',
+                    tension: 0.4, fill: true, pointRadius: 0, borderWidth: 2
+                },
+                {
+                    label: 'Otros',
+                    data: Array(maxPoints).fill(0),
+                    borderColor: '#95a5a6',
+                    backgroundColor: 'rgba(149,165,166,0.1)',
+                    tension: 0.4, fill: true, pointRadius: 0, borderWidth: 2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 0 },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: { usePointStyle: true, padding: 20, font: { size: 13 } }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(3) + ' MB/s'
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { callback: v => v.toFixed(2) + ' MB/s' },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                },
+                x: { display: false }
+            }
+        }
+    });
+
+    // Cerrar SSE anterior
+    if (userEventSource) { userEventSource.close(); userEventSource = null; }
+
+    userEventSource = new EventSource('/api/network/monitor');
+
+    userEventSource.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
+            const ps = data.protocolStats;
+
+            const datasets = userTrafficChart.data.datasets;
+            datasets[0].data.push(ps.httpMbps);
+            datasets[1].data.push(ps.voipMbps);
+            datasets[2].data.push(ps.streamingMbps);
+            datasets[3].data.push(ps.otherMbps);
+
+            datasets.forEach(ds => {
+                if (ds.data.length > maxPoints) ds.data.shift();
+            });
+
+            userTrafficChart.update('none');
+
+            const mbEl = document.getElementById('traffic-mb');
+            if (mbEl) mbEl.textContent = data.speed.toFixed(2) + ' MB/s';
+
+            const httpEl = document.getElementById('httpSpeed');
+            const voipEl = document.getElementById('voipSpeed');
+            const streamEl = document.getElementById('streamingSpeed');
+            const otherEl = document.getElementById('otherSpeed');
+
+            if (httpEl) { httpEl.textContent = ps.httpMbps.toFixed(2) + ' MB/s'; httpEl.style.color = ps.httpMbps > 0 ? '#3498db' : '#95a5a6'; }
+            if (voipEl) { voipEl.textContent = ps.voipMbps.toFixed(2) + ' MB/s'; voipEl.style.color = ps.voipMbps > 0 ? '#27ae60' : '#95a5a6'; }
+            if (streamEl) { streamEl.textContent = ps.streamingMbps.toFixed(2) + ' MB/s'; streamEl.style.color = ps.streamingMbps > 0 ? '#e74c3c' : '#95a5a6'; }
+            if (otherEl) { otherEl.textContent = ps.otherMbps.toFixed(2) + ' MB/s'; otherEl.style.color = ps.otherMbps > 0 ? '#95a5a6' : '#95a5a6'; }
+
+        } catch(e) { console.error('Error SSE tráfico:', e); }
+    };
+
+    userEventSource.onerror = function() {
+        if (userEventSource) { userEventSource.close(); userEventSource = null; }
+    };
+}
+
+function colorearTarjetaProtocolo(elementId, mbps, color) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    el.style.color = mbps > 0 ? color : '#3498db';
+}
+
+// Cerrar SSE al salir de la vista de tráfico
+document.querySelectorAll('.sidebar .nav-link').forEach(link => {
+    link.addEventListener('click', function() {
+        if (this.id !== 'trafficBtn' && userEventSource) {
+            userEventSource.close();
+            userEventSource = null;
+        }
+    });
+});
+
+let allDispositivosUser = [];
+let currentDispositivosUserPage = 1;
+const dispositivosUserPerPage = 5;
+
+// ── DISPOSITIVOS (solo lectura) ────────────────────────
+function loadDispositivosReadOnly() {
+    fetch('/api/dispositivos')
+        .then(r => r.json())
+        .then(data => {
+            allDispositivosUser = data;
+            currentDispositivosUserPage = 1;
+            renderDispositivosUserTable();
+        })
+        .catch(() => {
+            const tbody = document.getElementById('dispositivosTableBody');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#e74c3c;">Error al cargar dispositivos.</td></tr>';
+        });
+}
+
+function renderDispositivosUserTable() {
+    const tbody = document.getElementById('dispositivosTableBody');
+    const pagination = document.getElementById('dispositivosPaginationContainer');
+    if (!tbody) return;
+
+    if (!allDispositivosUser.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No hay dispositivos detectados.</td></tr>';
+        if (pagination) pagination.innerHTML = '';
+        return;
+    }
+
+    const start = (currentDispositivosUserPage - 1) * dispositivosUserPerPage;
+    const slice = allDispositivosUser.slice(start, start + dispositivosUserPerPage);
+
+    let html = '';
+    slice.forEach(d => {
+        const fecha = new Date(d.ultimaConexion).toLocaleString();
+        const estadoIcon = d.estadoAutorizacion === 'AUTORIZADO' ? '✅' : '❓';
+        const rowStyle = d.estadoAutorizacion === 'AUTORIZADO' ? '' : 'style="background: rgba(243,156,18,0.05);"';
+        html += `
+            <tr ${rowStyle}>
+                <td>${d.ip}</td>
+                <td style="font-family:monospace;">${d.mac || 'N/A'}</td>
+                <td>${fecha}</td>
+                <td>${estadoIcon} ${d.estadoAutorizacion}</td>
+            </tr>`;
+    });
+    tbody.innerHTML = html;
+
+    if (pagination) pagination.innerHTML = buildPagination(
+        currentDispositivosUserPage,
+        Math.ceil(allDispositivosUser.length / dispositivosUserPerPage),
+        allDispositivosUser.length,
+        dispositivosUserPerPage,
+        'changeDispositivosUserPage',
+        'dispositivos'
+    );
+}
+
+function changeDispositivosUserPage(page) {
+    currentDispositivosUserPage = page;
+    renderDispositivosUserTable();
+    const table = document.getElementById('dispositivosTableBody');
+    if (table) table.parentElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+
+
+// ── QoS (solo historial) ───────────────────────────────
+let allQoSUser = [];
+let currentQoSUserPage = 1;
+const qosUserPerPage = 5;
+
+function loadQoSReadOnly() {
+    fetch('/api/network/qos/latest?hours=0')
+        .then(r => r.json())
+        .then(data => {
+            allQoSUser = data;
+            currentQoSUserPage = 1;
+            renderQoSUserTable();
+        })
+        .catch(() => {
+            const tbody = document.getElementById('qosTableBody');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#e74c3c;">Error al cargar datos QoS.</td></tr>';
+        });
+}
+
+function renderQoSUserTable() {
+    const tbody = document.getElementById('qosTableBody');
+    const pagination = document.getElementById('qosPaginationContainer');
+    if (!tbody) return;
+
+    if (!allQoSUser.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No hay mediciones registradas.</td></tr>';
+        if (pagination) pagination.innerHTML = '';
+        return;
+    }
+
+    const start = (currentQoSUserPage - 1) * qosUserPerPage;
+    const slice = allQoSUser.slice(start, start + qosUserPerPage);
+
+    const statusEmoji = { 'excelente':'🟢','bueno':'🔵','aceptable':'🟡','malo':'🟠','muy-malo':'🔴' };
+    const statusLabel = { 'excelente':'Excelente','bueno':'Bueno','aceptable':'Aceptable','malo':'Malo','muy-malo':'Muy Malo' };
+
+    let html = '';
+    slice.forEach(m => {
+        const sc = (m.qualityStatus || 'malo').toLowerCase().replace(/[\s_]/g,'-').replace(/[éí]/g, c => c==='é'?'e':'i');
+        const fecha = new Date(m.timestamp).toLocaleString('es-CO', {
+            day:'2-digit', month:'2-digit', year:'numeric',
+            hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true
+        });
+        html += `
+            <tr>
+                <td><strong>${m.targetIp}</strong></td>
+                <td>${fecha}</td>
+                <td>${m.latencyMs.toFixed(2)}</td>
+                <td>${m.jitterMs.toFixed(2)}</td>
+                <td>${m.packetLossPercent.toFixed(2)}</td>
+                <td><strong>${m.mosScore.toFixed(2)}</strong></td>
+                <td><span class="qos-status-badge ${sc}">${statusEmoji[sc] || '🔴'} ${statusLabel[sc] || m.qualityStatus}</span></td>
+            </tr>`;
+    });
+    tbody.innerHTML = html;
+
+    if (pagination) pagination.innerHTML = buildPagination(
+        currentQoSUserPage,
+        Math.ceil(allQoSUser.length / qosUserPerPage),
+        allQoSUser.length,
+        qosUserPerPage,
+        'changeQoSUserPage',
+        'mediciones'
+    );
+}
+
+function buildPagination(currentPage, totalPages, totalItems, perPage, changeFn, itemLabel) {
+    const start = (currentPage - 1) * perPage;
+    let pag = `<span style="margin-right:15px;color:#666;font-size:14px;">
+        Mostrando ${start + 1}-${Math.min(start + perPage, totalItems)} de ${totalItems} ${itemLabel}
+    </span>`;
+
+    if (currentPage > 1) {
+        pag += `<button onclick="${changeFn}(1)" class="btn pagination-button" title="Primera">
+            <i class="fas fa-angle-double-left"></i></button>`;
+        pag += `<button onclick="${changeFn}(${currentPage - 1})" class="btn pagination-button">
+            <i class="fas fa-angle-left"></i> Anterior</button>`;
+    }
+
+    // Máximo 5 botones numerados visibles
+    const maxButtons = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+    if (endPage - startPage < maxButtons - 1) startPage = Math.max(1, endPage - maxButtons + 1);
+
+    for (let i = startPage; i <= endPage; i++) {
+        const activeClass = i === currentPage ? 'btn-primary' : '';
+        pag += `<button onclick="${changeFn}(${i})" class="btn pagination-button ${activeClass}">${i}</button>`;
+    }
+
+    if (currentPage < totalPages) {
+        pag += `<button onclick="${changeFn}(${currentPage + 1})" class="btn pagination-button">
+            Siguiente <i class="fas fa-angle-right"></i></button>`;
+        pag += `<button onclick="${changeFn}(${totalPages})" class="btn pagination-button" title="Última">
+            <i class="fas fa-angle-double-right"></i></button>`;
+    }
+
+    return pag;
+}
+
+function startUserTraffic() {
+    fetch('/api/network/start', { method: 'POST' })
+        .then(() => initUserTrafficMonitor())
+        .catch(err => console.error('Error al iniciar:', err));
+}
+
+function stopUserTraffic() {
+    fetch('/api/network/stop', { method: 'POST' })
+        .then(() => {
+            if (userEventSource) { userEventSource.close(); userEventSource = null; }
+        })
+        .catch(err => console.error('Error al detener:', err));
+}
+
+function resetUserTraffic() {
+    fetch('/api/network/reset', { method: 'POST' })
+        .then(() => {
+            if (userTrafficChart) {
+                // Reiniciar TODOS los datasets
+                userTrafficChart.data.datasets.forEach(ds => {
+                    ds.data = Array(maxPoints).fill(0);
+                });
+                userTrafficChart.update();
+            }
+            const ids = ['traffic-mb','httpSpeed','voipSpeed','streamingSpeed','otherSpeed'];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = '0.00 MB/s';
+            });
+        })
+        .catch(err => console.error('Error al reiniciar:', err));
+}
+
+function changeQoSUserPage(page) {
+    currentQoSUserPage = page;
+    renderQoSUserTable();
+}
+
+function loadUserDashboardData() {
+    // --- Dispositivos ---
+    fetch('/api/dispositivos')
+        .then(r => r.json())
+        .then(data => {
+            const total = data.length;
+            const autorizados = data.filter(d => d.estadoAutorizacion === 'AUTORIZADO').length;
+            const desconocidos = data.filter(d => d.estadoAutorizacion === 'DESCONOCIDO').length;
+
+            const totalEl = document.getElementById('userTotalDevices');
+            const autEl   = document.getElementById('userAutorizados');
+            const descEl  = document.getElementById('userDesconocidos');
+
+            if (totalEl) totalEl.textContent = total;
+            if (autEl)   autEl.textContent   = autorizados;
+            if (descEl)  descEl.textContent  = desconocidos;
+        })
+        .catch(() => {
+            const el = document.getElementById('userTotalDevices');
+            if (el) el.textContent = 'Error';
+        });
+
+    // --- Último QoS ---
+    fetch('/api/network/qos/latest?hours=0')
+        .then(r => r.json())
+        .then(data => {
+            const mosEl    = document.getElementById('userMosScore');
+            const statusEl = document.getElementById('userQosStatus');
+            const genEl    = document.getElementById('userQosGeneral');
+
+            if (!data || data.length === 0) {
+                if (mosEl)    mosEl.textContent    = 'N/A';
+                if (statusEl) statusEl.textContent = 'Sin mediciones';
+                if (genEl)    genEl.innerHTML      = '⚪ Sin datos disponibles';
+                return;
+            }
+
+            const latest = data[0];
+            const sc = (latest.qualityStatus || 'malo').toLowerCase()
+                        .replace(/[\s_]/g, '-').replace(/[éí]/g, c => c==='é'?'e':'i');
+
+            const colores = { excelente:'#27ae60', bueno:'#3498db', aceptable:'#f39c12', malo:'#e67e22', 'muy-malo':'#e74c3c' };
+            const emojis  = { excelente:'🟢', bueno:'🔵', aceptable:'🟡', malo:'🟠', 'muy-malo':'🔴' };
+            const labels  = { excelente:'Excelente', bueno:'Bueno', aceptable:'Aceptable', malo:'Malo', 'muy-malo':'Muy Malo' };
+
+            const color = colores[sc] || '#e74c3c';
+            const emoji = emojis[sc]  || '🔴';
+            const label = labels[sc]  || latest.qualityStatus;
+
+            if (mosEl) {
+                mosEl.textContent = latest.mosScore.toFixed(2) + ' / 5.0';
+                mosEl.style.color = color;
+            }
+            if (statusEl) {
+                statusEl.innerHTML = `<span class="qos-status-badge ${sc}">${emoji} ${label}</span>`;
+            }
+            if (genEl) {
+                genEl.innerHTML = `${emoji} <strong style="color:${color};">${label}</strong>
+                    <span style="color:#999; font-size:12px; margin-left:6px;">
+                        Latencia: ${latest.latencyMs.toFixed(0)}ms · Jitter: ${latest.jitterMs.toFixed(0)}ms
+                    </span>`;
+            }
+        })
+        .catch(() => {
+            const el = document.getElementById('userQosGeneral');
+            if (el) el.innerHTML = '⚠️ <strong style="color:#f39c12;">Sin respuesta</strong>';
+        });
+
+    // --- Conexión a Internet ---
+    fetch('/api/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip: '8.8.8.8' })
+    })
+        .then(r => r.json())
+        .then(data => {
+            const el = document.getElementById('userNetworkStatus');
+            if (!el) return;
+            el.innerHTML = data.output && !data.output.toLowerCase().includes('error')
+                ? '🟢 <strong style="color:#27ae60;">Conectada</strong>'
+                : '🔴 <strong style="color:#e74c3c;">Sin conexión</strong>';
+        })
+        .catch(() => {
+            const el = document.getElementById('userNetworkStatus');
+            if (el) el.innerHTML = '⚠️ <strong style="color:#f39c12;">Sin respuesta</strong>';
+        });
 }
 
 </script>
+
+<!-- Dashboard Power BI -->
+<div class="main-content" id="pbiContent" style="display: none;">
+    <h2><i class="fas fa-chart-pie" style="color: #e74c3c; margin-right: 10px;"></i>Dashboard de Monitoreo</h2>
+    <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
+        Visualización en tiempo real conectada a la base de datos ShieldNet.
+    </p>
+    <div style="border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        <iframe 
+            title="ShieldNet Dashboard"
+            width="100%" 
+            height="650px"
+            src="https://app.powerbi.com/view?r=eyJrIjoiY2I4ZDM4YWYtNzAxYy00NzBiLWJkMjAtY2UxY2ZkYTcwZjYzIiwidCI6IjlkMTJiZjNmLWU0ZjYtNDdhYi05MTJmLTFhMmYwZmM0OGFhNCIsImMiOjR9"
+            frameborder="0" 
+            allowfullscreen="true"
+            style="border: none; display: block;">
+        </iframe>
+    </div>
+</div>
+</div> <!-- cierre content-wrapper -->
+
+<footer style="margin-top: 20px; text-align: center; font-size: 14px; color: var(--primary-color); padding: 20px 0;">
+    <p>&copy; 2026 ShieldNet. Todos los derechos reservados.</p>
+</footer>
+
+</div>
 </body>
 </html>

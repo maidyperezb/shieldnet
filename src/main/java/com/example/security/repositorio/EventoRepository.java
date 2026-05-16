@@ -13,5 +13,6 @@ public interface EventoRepository extends JpaRepository<Evento, Long> {
     List<Evento> findByIp(String ip);
     List<Evento> findByFechaBetween(Date fechaInicio, Date fechaFin);
     List<Evento> findByUsuarioId(Long usuarioId);
+    List<Evento> findAllByOrderByFechaDescHoraDesc();
 }
 

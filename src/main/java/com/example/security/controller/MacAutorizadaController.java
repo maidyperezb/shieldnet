@@ -8,6 +8,7 @@ import com.example.security.servicios.MacAutorizadaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.example.security.servicios.EventoService;
 
 import java.util.List;
 import java.util.Map;
@@ -22,13 +23,14 @@ public class MacAutorizadaController {
     @Autowired
     private DispositivoRepository dispositivoRepository;
 
-    // Obtener todas las MACs autorizadas
+    @Autowired
+    private EventoService eventoService;
+
     @GetMapping
     public ResponseEntity<List<MacAutorizada>> getAll() {
         return ResponseEntity.ok(macAutorizadaService.findAll());
     }
 
-    // Agregar MAC autorizada
     @PostMapping
     public ResponseEntity<?> agregar(@RequestBody Map<String, String> body) {
         String mac = body.get("mac");
@@ -38,27 +40,30 @@ public class MacAutorizadaController {
             return ResponseEntity.badRequest().body("MAC requerida");
         }
 
-        // Validar formato MAC
         if (!mac.matches("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$")) {
             return ResponseEntity.badRequest().body("Formato de MAC inválido. Ejemplo: AA:BB:CC:DD:EE:FF");
         }
 
         MacAutorizada saved = macAutorizadaService.agregarMac(mac, descripcion);
 
-        // Actualizar dispositivos que tengan esa MAC a AUTORIZADO
         List<Dispositivo> dispositivos = dispositivoRepository.findByMac(mac.toUpperCase().trim());
         for (Dispositivo d : dispositivos) {
             d.setEstadoAutorizacion(EstadoAutorizacion.AUTORIZADO);
             dispositivoRepository.save(d);
         }
 
+        eventoService.registrarEvento(
+            "MAC autorizada agregada: " + mac +
+            (descripcion.isEmpty() ? "" : " — " + descripcion)
+        );
+
         return ResponseEntity.ok(saved);
     }
 
-    // Eliminar MAC autorizada
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> eliminar(@PathVariable Long id) {
-        macAutorizadaService.eliminarMac(id);
-        return ResponseEntity.ok("MAC eliminada");
-    }
+public ResponseEntity<?> eliminar(@PathVariable Long id) {
+    macAutorizadaService.eliminarMac(id);
+    eventoService.registrarEvento("MAC autorizada eliminada (ID: " + id + ")");
+    return ResponseEntity.ok("MAC eliminada");
+}
 }

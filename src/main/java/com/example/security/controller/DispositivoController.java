@@ -18,6 +18,7 @@ import com.example.security.dto.DispositivoDTO;
 import com.example.security.modelo.Dispositivo;
 import com.example.security.servicios.ArpScannerService;
 import com.example.security.servicios.DispositivoService;
+import com.example.security.servicios.EventoService;
 
 @RestController
 @RequestMapping("/api/dispositivos")
@@ -28,6 +29,9 @@ public class DispositivoController {
 
     @Autowired
     private ArpScannerService arpScannerService;
+
+    @Autowired
+    private EventoService eventoService;
 
     /**
      * Obtiene todos los dispositivos
@@ -110,7 +114,8 @@ public class DispositivoController {
      */
     @PostMapping("/scanner/scan")
     public ResponseEntity<String> scanNow() {
-        arpScannerService.scanNetwork();
-        return ResponseEntity.ok("Escaneo iniciado");
+    arpScannerService.scanNetwork();
+    eventoService.registrarEvento("Escaneo manual de red iniciado");
+    return ResponseEntity.ok("Escaneo iniciado");
 }
 }

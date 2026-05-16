@@ -38,7 +38,7 @@ public class Evento {
     private String descripcion;
 
     @ManyToOne
-    @JoinColumn(name = "usuario_id", nullable = false)
+    @JoinColumn(name = "usuario_id", nullable = true)
     private Usuario usuario;
 
     public Evento(String ip, String descripcion) {
