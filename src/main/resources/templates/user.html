@@ -1857,5 +1857,10 @@ function loadUserDashboardData() {
 </footer>
 
 </div>
+<!-- Incluir Chat Widget flotante al final del body -->
+<div th:replace="fragments/chat-widget :: chat-widget"></div>
+
+<!-- Script del widget -->
+<script src="/js/chat.js"></script>
 </body>
 </html>
