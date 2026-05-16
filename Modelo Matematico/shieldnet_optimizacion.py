@@ -31,7 +31,7 @@ DB_CONFIG = {
     "host": os.getenv('MYSQL_HOST', '127.0.0.1'),
     "port": int(os.getenv('MYSQL_PORT', 3306)),
     "user": os.getenv('MYSQL_USER', os.getenv('MYSQL_USERNAME', 'root')),
-    "password": os.getenv('MYSQL_PASSWORD', os.getenv('MYSQL_PASS', '')),
+    "password": os.getenv('MYSQL_PASSWORD', os.getenv('MYSQL_PASS', '1234')),
     "db": os.getenv('MYSQL_DATABASE', 'shieldnet'),
     "charset": os.getenv('MYSQL_CHARSET', 'utf8mb4')
 }

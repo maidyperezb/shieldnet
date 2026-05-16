@@ -17,9 +17,12 @@ public class OptimizacionController {
 
         try {
 
-            // Llamada HTTP al servicio de optimización (contenedor 'optimizacion')
+            // Llamada HTTP al servicio de optimización.
+            // Usa variables de entorno para permitir ejecución local o en Docker.
+            String host = System.getenv().getOrDefault("OPTIMIZACION_HOST", System.getenv().getOrDefault("OPTIMIZACION_HOSTNAME", "localhost"));
+            String port = System.getenv().getOrDefault("OPTIMIZACION_PORT", System.getenv().getOrDefault("OPTIMIZACION_PORT_NUMBER", "5060"));
+            String url = String.format("http://%s:%s/optimize", host, port);
             RestTemplate rt = new RestTemplate();
-            String url = "http://optimizacion:5060/optimize";
             String resultado = rt.getForObject(url, String.class);
 
             if (resultado == null || resultado.trim().isEmpty()) {
