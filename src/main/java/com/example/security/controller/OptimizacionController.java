@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.Map;
+import org.springframework.web.client.RestTemplate;
 
 @RestController
 @RequestMapping("/api/optimizacion")
@@ -16,39 +17,19 @@ public class OptimizacionController {
 
         try {
 
-            ProcessBuilder pb = new ProcessBuilder(
-                 "C:\\Users\\MAIDY Y MICHELL\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
-            "C:\\Users\\MAIDY Y MICHELL\\Downloads\\Software2 - ShieldNet - Thay\\Software2 - ShieldNet, funciona\\Software - ShieldNet\\security-demo (1)-20250423T174720Z-001\\security-demo (1)\\security-demo\\Modelo Matematico\\shieldnet_optimizacion.py"
-            );
+            // Llamada HTTP al servicio de optimización (contenedor 'optimizacion')
+            RestTemplate rt = new RestTemplate();
+            String url = "http://optimizacion:5060/optimize";
+            String resultado = rt.getForObject(url, String.class);
 
-            pb.redirectErrorStream(true);
-
-            Process process = pb.start();
-
-            BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream())
-            );
-
-            String line;
-            StringBuilder output = new StringBuilder();
-
-            while ((line = reader.readLine()) != null) {
-                output.append(line);
-            }
-
-            process.waitFor();
-
-            String resultado = output.toString().trim();
-
-            if (resultado.isEmpty()) {
+            if (resultado == null || resultado.trim().isEmpty()) {
                 return ResponseEntity.internalServerError()
                     .body(Map.of(
                         "success", false,
-                        "error", "El script Python no devolvió ningún resultado"
+                        "error", "El servicio de optimización no devolvió resultado"
                     ));
             }
 
-            // Envuelve el JSON de Python en { "resultado": "..." }
             return ResponseEntity.ok(Map.of("resultado", resultado));
 
         } catch (Exception e) {
