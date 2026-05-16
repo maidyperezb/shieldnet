@@ -22,17 +22,18 @@
 """
 
 import sys
+import os
 import json
 import pymysql
 from scipy.optimize import linprog
 
 DB_CONFIG = {
-    "host": "127.0.0.1",
-    "port": 3306,
-    "user": "root",
-    "password": "",
-    "db": "shieldnet",
-    "charset": "utf8mb4"
+    "host": os.getenv('MYSQL_HOST', '127.0.0.1'),
+    "port": int(os.getenv('MYSQL_PORT', 3306)),
+    "user": os.getenv('MYSQL_USER', os.getenv('MYSQL_USERNAME', 'root')),
+    "password": os.getenv('MYSQL_PASSWORD', os.getenv('MYSQL_PASS', '')),
+    "db": os.getenv('MYSQL_DATABASE', 'shieldnet'),
+    "charset": os.getenv('MYSQL_CHARSET', 'utf8mb4')
 }
 
 
@@ -154,13 +155,13 @@ def resolver_simplex(x1_real, x2_real, x3_real):
 # SOLO imprime JSON — nada más
 # ─────────────────────────────────────────────
 def mostrar_resultados(x1_real, x2_real, x3_real, detalles, resultado):
+    """Construye y devuelve un diccionario con el resultado (compatible con JSON)."""
 
     if not resultado.success:
-        print(json.dumps({
+        return {
             "success": False,
             "error": resultado.message
-        }))
-        return
+        }
 
     ox1 = round(resultado.x[0])
     ox2 = round(resultado.x[1])
@@ -209,8 +210,27 @@ def mostrar_resultados(x1_real, x2_real, x3_real, detalles, resultado):
         )
     }
 
-    # IMPORTANTE: solo este print — Java lo captura completo
-    print(json.dumps(resultado_json, ensure_ascii=False))
+    return resultado_json
+
+
+def run_optimization():
+    """Función de conveniencia que ejecuta el flujo completo y devuelve el resultado JSON.
+
+    Útil para exponer el servicio vía HTTP desde un contenedor.
+    """
+    try:
+        conn = conectar()
+        x1, x2, x3, detalles = obtener_datos(conn)
+        conn.close()
+
+        resultado = resolver_simplex(x1, x2, x3)
+        return mostrar_resultados(x1, x2, x3, detalles, resultado)
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 
 # ─────────────────────────────────────────────
