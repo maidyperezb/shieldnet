@@ -44,6 +44,16 @@ public class ContextBuilder {
 
     @Value("${chat.context-days:7}")
     private int contextDays;
+    @Value("${chat.max-context-chars:12000}")
+    private int maxContextChars;
+
+    @Value("${chat.max-events:200}")
+    private int maxEvents;
+
+    @Value("${chat.max-device-details:20}")
+    private int maxDeviceDetails;
+    @Value("${chat.max-event-samples:10}")
+    private int maxEventSamples;
 
     /**
      * Construir contexto completo para la sesión del usuario
@@ -67,7 +77,45 @@ public class ContextBuilder {
         context.append("\n## DISPOSITIVOS EN RED\n");
         context.append(buildDeviceContext());
 
+        return finalizeContext(context, maxContextChars);
+    }
+
+    /**
+     * Variante que permite especificar un máximo de caracteres a enviar.
+     */
+    public String buildFullContext(Usuario usuario, int maxChars) {
+        StringBuilder context = new StringBuilder();
+
+        // 1. Schema/descripción de tablas
+        context.append("## ESQUEMA DE DATOS DISPONIBLES\n");
+        context.append(getSchemaDescription());
+
+        // 2. Eventos recientes
+        context.append("\n## EVENTOS HISTÓRICOS (últimos ").append(contextDays).append(" días)\n");
+        context.append(buildEventContext());
+
+        // 3. Métricas QoS
+        context.append("\n## MÉTRICAS QoS (últimos ").append(contextDays).append(" días)\n");
+        context.append(buildQoSContext());
+
+        // 4. Dispositivos
+        context.append("\n## DISPOSITIVOS EN RED\n");
+        context.append(buildDeviceContext());
+
+        return finalizeContext(context, maxChars);
+    }
+
+    private String finalizeContext(StringBuilder context, int maxChars) {
+        if (context.length() > maxChars) {
+            String truncated = context.substring(0, Math.max(0, maxChars - 120));
+            truncated += "\n\n[... CONTEXTO TRUNCADO: demasiada información para enviar al modelo]\n";
+            return truncated;
+        }
         return context.toString();
+    }
+
+    public int getMaxContextChars() {
+        return this.maxContextChars;
     }
 
     /**
@@ -78,7 +126,12 @@ public class ContextBuilder {
         LocalDate endDate = LocalDate.now();
 
         List<Evento> eventos = eventoRepository.findByFechaBetween(java.sql.Date.valueOf(startDate),
-                java.sql.Date.valueOf(endDate));
+            java.sql.Date.valueOf(endDate));
+
+        int totalEventos = eventos.size();
+        if (totalEventos > maxEvents) {
+            eventos = eventos.subList(0, maxEvents);
+        }
 
         StringBuilder sb = new StringBuilder();
 
@@ -86,12 +139,18 @@ public class ContextBuilder {
             sb.append("No hay eventos registrados en los últimos ").append(contextDays).append(" días.\n");
         }
         else {
-            for (Evento evento : eventos) {
+            // Mostrar solo una muestra de eventos para evitar contextos demasiado largos
+            int sample = Math.min(eventos.size(), maxEventSamples);
+            for (int i = 0; i < sample; i++) {
+                Evento evento = eventos.get(i);
                 sb.append(String.format("• [%s %s] IP: %s - %s (Usuario: %s)%n", evento.getFecha(), evento.getHora(),
                         evento.getIp(), evento.getDescripcion(),
                         evento.getUsuario() != null ? evento.getUsuario().getUsername() : "Sistema"));
             }
-            sb.append(String.format("\nTotal de eventos: %d%n", eventos.size()));
+            sb.append(String.format("\nTotal de eventos encontrados: %d (se muestran %d)\n", totalEventos, sample));
+            if (totalEventos > sample) {
+                sb.append(String.format("(Se omitieron %d eventos por límite de contexto)\n", totalEventos - sample));
+            }
         }
 
         return sb.toString();
@@ -150,11 +209,12 @@ public class ContextBuilder {
      * Construir contexto de dispositivos
      */
     public String buildDeviceContext() {
-        List<Dispositivo> authorized = dispositivoRepository.findAll().stream()
-                .filter(d -> d.getEstadoAutorizacion() == EstadoAutorizacion.AUTORIZADO).toList();
+        List<Dispositivo> allDevices = dispositivoRepository.findAll();
+        List<Dispositivo> authorized = allDevices.stream()
+            .filter(d -> d.getEstadoAutorizacion() == EstadoAutorizacion.AUTORIZADO).toList();
 
-        List<Dispositivo> unauthorized = dispositivoRepository.findAll().stream()
-                .filter(d -> d.getEstadoAutorizacion() == EstadoAutorizacion.NO_AUTORIZADO).toList();
+        List<Dispositivo> unauthorized = allDevices.stream()
+            .filter(d -> d.getEstadoAutorizacion() == EstadoAutorizacion.NO_AUTORIZADO).toList();
 
         StringBuilder sb = new StringBuilder();
 
@@ -163,13 +223,50 @@ public class ContextBuilder {
 
         if (!unauthorized.isEmpty()) {
             sb.append("\nDISPOSITIVOS NO AUTORIZADOS DETECTADOS:\n");
-            for (Dispositivo dev : unauthorized) {
+            int shown = Math.min(unauthorized.size(), maxDeviceDetails);
+            for (int i = 0; i < shown; i++) {
+                Dispositivo dev = unauthorized.get(i);
                 sb.append(String.format("  • IP: %s | MAC: %s | Estado: %s%n", dev.getIp(), dev.getMac(),
                         dev.getEstadoAutorizacion()));
+            }
+            if (unauthorized.size() > shown) {
+                sb.append(String.format("  (Se muestran %d de %d dispositivos no autorizados)\n", shown, unauthorized.size()));
             }
             sb.append("\nRECOMENDACIÓN: Investigar estos dispositivos no autorizados inmediatamente.\n");
         }
 
+        return sb.toString();
+    }
+
+    /**
+     * Resumen corto del estado de red: sólo cifras y promedios, usado como último recurso
+     * para reducir el payload cuando el contexto completo es demasiado grande.
+     */
+    public String buildShortSummary(Usuario usuario) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("RESUMEN CORTO DE LA RED:\n");
+
+        // Eventos
+        LocalDate startDate = LocalDate.now().minusDays(contextDays);
+        LocalDate endDate = LocalDate.now();
+        List<Evento> eventos = eventoRepository.findByFechaBetween(java.sql.Date.valueOf(startDate),
+                java.sql.Date.valueOf(endDate));
+        sb.append(String.format("  • Eventos últimos %d días: %d\n", contextDays, eventos.size()));
+
+        // QoS promedios
+        LocalDateTime startTime = LocalDateTime.now().minusDays(contextDays);
+        List<QoSMetrics> metrics = qosRepository.findRecentMetrics(startTime);
+        double avgLatency = metrics.stream().mapToDouble(m -> m.getLatencyMs() != null ? m.getLatencyMs() : 0).average().orElse(0);
+        double avgPacketLoss = metrics.stream().mapToDouble(m -> m.getPacketLossPercent() != null ? m.getPacketLossPercent() : 0).average().orElse(0);
+        sb.append(String.format("  • Latencia promedio: %.2f ms | Pérdida de paquetes: %.2f %%\n", avgLatency, avgPacketLoss));
+
+        // Dispositivos
+        List<Dispositivo> allDevices = dispositivoRepository.findAll();
+        long auth = allDevices.stream().filter(d -> d.getEstadoAutorizacion() == EstadoAutorizacion.AUTORIZADO).count();
+        long unauth = allDevices.stream().filter(d -> d.getEstadoAutorizacion() == EstadoAutorizacion.NO_AUTORIZADO).count();
+        sb.append(String.format("  • Dispositivos: %d autorizados, %d no autorizados\n", auth, unauth));
+
+        sb.append("\n(Resumen corto generado por ShieldNet para reducir tamaño del payload)\n");
         return sb.toString();
     }
 

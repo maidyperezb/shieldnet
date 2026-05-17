@@ -47,9 +47,52 @@ public class ChatService {
 
                 long startTime = System.currentTimeMillis();
 
-                // 1. Construir contexto dinámico
-                String context = contextBuilder.buildFullContext(usuario);
+                // 1. Determinar límite de contexto dinámico según la petición del usuario
+                int defaultMax = contextBuilder.getMaxContextChars();
+                int allowed;
+                String cleanedQuery = query == null ? "" : query;
+
+                if (cleanedQuery.contains("[context:short]")) {
+                    allowed = Math.min(defaultMax, 2000);
+                    cleanedQuery = cleanedQuery.replace("[context:short]", "").trim();
+                }
+                else if (cleanedQuery.contains("[context:medium]")) {
+                    allowed = Math.min(defaultMax, 8000);
+                    cleanedQuery = cleanedQuery.replace("[context:medium]", "").trim();
+                }
+                else if (cleanedQuery.contains("[context:full]")) {
+                    allowed = defaultMax;
+                    cleanedQuery = cleanedQuery.replace("[context:full]", "").trim();
+                }
+                else {
+                    // Heurística: reducir el contexto en función de la longitud de la pregunta
+                    allowed = Math.max(2000, defaultMax - Math.min(10000, cleanedQuery.length() * 12));
+                }
+
+                // Construir contexto con el límite calculado
+                String context = contextBuilder.buildFullContext(usuario, allowed);
                 String systemPrompt = contextBuilder.buildSystemPrompt();
+
+                int payloadLength = (systemPrompt == null ? 0 : systemPrompt.length()) + (context == null ? 0 : context.length()) + cleanedQuery.length();
+                logger.debug("Context length used: {} chars (allowed {})", context.length(), allowed);
+                logger.debug("Payload length (system+context+query): {} chars", payloadLength);
+
+                // Si el payload total excede el límite permitido, intentar reducir el contexto más agresivamente
+                if (payloadLength > allowed) {
+                    int reducedAllowed = Math.max(1000, allowed / 3);
+                    logger.info("Payload {} > allowed {} — reduciendo contexto a {} chars", payloadLength, allowed, reducedAllowed);
+                    context = contextBuilder.buildFullContext(usuario, reducedAllowed);
+                    payloadLength = (systemPrompt == null ? 0 : systemPrompt.length()) + (context == null ? 0 : context.length()) + cleanedQuery.length();
+                    logger.debug("After reduction payload length: {} chars", payloadLength);
+                }
+
+                // Si sigue excediendo, usar resumen corto como último recurso
+                if (payloadLength > allowed) {
+                    logger.info("Payload sigue excediendo allowed; usando resumen corto");
+                    context = contextBuilder.buildShortSummary(usuario);
+                    payloadLength = (systemPrompt == null ? 0 : systemPrompt.length()) + (context == null ? 0 : context.length()) + cleanedQuery.length();
+                    logger.debug("Payload length after short summary: {} chars", payloadLength);
+                }
 
                 logger.info("Iniciando streaming real para usuario: {}", usuarioId);
 
@@ -57,8 +100,8 @@ public class ChatService {
                 StringBuilder fullResponse = new StringBuilder();
 
                 return chatClient.prompt()
-                        .system(systemPrompt)
-                        .user(context + "\n\nPregunta: " + query)
+                    .system(systemPrompt)
+                    .user(context + "\n\nPregunta: " + cleanedQuery)
                         .stream()
                         .content()
                         .doOnNext(fullResponse::append)

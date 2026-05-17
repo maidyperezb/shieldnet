@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Description;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,8 @@ public class ChatAIService {
 
     @Autowired
     private DispositivoRepository dispositivoRepository;
+    @Value("${chat.max-device-details:20}")
+    private int maxDeviceDetails;
 
     // ============================================================================
     // TOOL 1: Query Event History
@@ -154,8 +157,16 @@ public class ChatAIService {
 
                 if (!allDevices.isEmpty()) {
                     result.append("Detalles:\n");
-                    allDevices.forEach(d -> result.append(String.format("  - IP: %s | MAC: %s | Estado: %s\n",
-                            d.getIp(), d.getMac(), d.getEstadoAutorizacion())));
+                    int shown = Math.min(allDevices.size(), maxDeviceDetails);
+                    for (int i = 0; i < shown; i++) {
+                        Dispositivo d = allDevices.get(i);
+                        result.append(String.format("  - IP: %s | MAC: %s | Estado: %s\n", d.getIp(), d.getMac(),
+                                d.getEstadoAutorizacion()));
+                    }
+                    if (allDevices.size() > shown) {
+                        result.append(
+                                String.format("  (Se muestran %d de %d dispositivos)\n", shown, allDevices.size()));
+                    }
                 }
 
                 logger.info("[HERRAMIENTA] executeNetworkScan ejecutada - type: {}, subnet: {}", type, subnet);
@@ -305,14 +316,28 @@ public class ChatAIService {
         sb.append(String.format("  • No autorizados: %d\n\n", unauthorized.size()));
 
         if (!authorized.isEmpty()) {
-            sb.append("Dispositivos AUTORIZADOS:\n");
-            authorized.forEach(d -> sb.append(String.format("  ✓ IP: %s | MAC: %s\n", d.getIp(), d.getMac())));
+            sb.append("Dispositivos AUTORIZADOS (muestra limitada):\n");
+            int shownAuth = Math.min(authorized.size(), maxDeviceDetails);
+            for (int i = 0; i < shownAuth; i++) {
+                Dispositivo d = authorized.get(i);
+                sb.append(String.format("  ✓ IP: %s | MAC: %s\n", d.getIp(), d.getMac()));
+            }
+            if (authorized.size() > shownAuth) {
+                sb.append(String.format("  (Se muestran %d de %d autorizados)\n", shownAuth, authorized.size()));
+            }
             sb.append("\n");
         }
 
         if (!unauthorized.isEmpty()) {
-            sb.append("Dispositivos NO AUTORIZADOS:\n");
-            unauthorized.forEach(d -> sb.append(String.format("IP: %s | MAC: %s\n", d.getIp(), d.getMac())));
+            sb.append("Dispositivos NO AUTORIZADOS (muestra limitada):\n");
+            int shownUnauth = Math.min(unauthorized.size(), maxDeviceDetails);
+            for (int i = 0; i < shownUnauth; i++) {
+                Dispositivo d = unauthorized.get(i);
+                sb.append(String.format("IP: %s | MAC: %s\n", d.getIp(), d.getMac()));
+            }
+            if (unauthorized.size() > shownUnauth) {
+                sb.append(String.format("  (Se muestran %d de %d no autorizados)\n", shownUnauth, unauthorized.size()));
+            }
         }
         else {
             sb.append("No hay dispositivos no autorizados en la red.\n");
