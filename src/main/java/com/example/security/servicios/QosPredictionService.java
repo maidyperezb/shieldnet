@@ -47,10 +47,14 @@ public class QosPredictionService {
         @JsonProperty("trend")            public String trend;
     }
 
-    public String predict(double mosActual,    double mosAnterior,
-                          double jitterActual, double jitterAnterior,
-                          double latencyActual,double latencyAnterior,
-                          double packetLoss) {
+    /**
+     * Consulta al microservicio ML y devuelve la respuesta completa
+     * (estado predicho, confianza y tendencia) o null si no está disponible.
+     */
+    public PredictResponse predictFull(double mosActual,    double mosAnterior,
+                                       double jitterActual, double jitterAnterior,
+                                       double latencyActual,double latencyAnterior,
+                                       double packetLoss) {
         try {
             String url = mlServiceUrl + "/predict";
 
@@ -76,12 +80,24 @@ public class QosPredictionService {
                             result.predictedStatus,
                             Math.round(result.confidence * 100),
                             result.trend);
-                return result.predictedStatus;
+                return result;
             }
 
         } catch (Exception e) {
             logger.warn("Microservicio ML no disponible: {}", e.getMessage());
         }
         return null;
+    }
+
+    /** Atajo: devuelve solo el estado predicho (o null). */
+    public String predict(double mosActual,    double mosAnterior,
+                          double jitterActual, double jitterAnterior,
+                          double latencyActual,double latencyAnterior,
+                          double packetLoss) {
+        PredictResponse result = predictFull(mosActual, mosAnterior,
+                                             jitterActual, jitterAnterior,
+                                             latencyActual, latencyAnterior,
+                                             packetLoss);
+        return result != null ? result.predictedStatus : null;
     }
 }

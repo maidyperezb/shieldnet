@@ -245,18 +245,22 @@ public class QoSService {
                     logger.info("Primera medición para {}, sin historial previo", targetIp);
                 }
 
-                String predicted = predictionService.predict(
+                QosPredictionService.PredictResponse prediction = predictionService.predictFull(
                     qosData.getMosScore(),     mosAnterior,
                     qosData.getJitterMs(),     jitterAnterior,
                     qosData.getLatencyMs(),    latencyAnterior,
                     qosData.getPacketLossPercent()
                 );
 
-                if (predicted != null) {
-                    metrics.setPredictedStatus(predicted);
-                    qosData.setPredictedStatus(predicted);
-                    logger.info("ML predijo estado futuro: {} (sistema actual: {})",
-                                predicted, qosData.getQualityStatus());
+                if (prediction != null && prediction.predictedStatus != null) {
+                    metrics.setPredictedStatus(prediction.predictedStatus);
+                    qosData.setPredictedStatus(prediction.predictedStatus);
+                    metrics.setPredictedConfidence(prediction.confidence);
+                    qosData.setPredictedConfidence(prediction.confidence);
+                    logger.info("ML predijo estado futuro: {} (confianza: {}%, sistema actual: {})",
+                                prediction.predictedStatus,
+                                Math.round(prediction.confidence * 100),
+                                qosData.getQualityStatus());
                 }
             } catch (Exception e) {
                 logger.warn("Predicción ML no disponible (no crítico): {}", e.getMessage());

@@ -1613,10 +1613,11 @@ function loadQoSView() {
                         <th>MOS Score</th>
                         <th>Estado</th>
                         <th>🤖 ML Predicción</th>
+                        <th>🎯 Confianza ML</th>
                     </tr>
                 </thead>
                 <tbody id="qosHistoryTableBody">
-                    <tr><td colspan="8" style="text-align: center;">Cargando...</td></tr>
+                    <tr><td colspan="9" style="text-align: center;">Cargando...</td></tr>
                 </tbody>
             </table>
             
@@ -1644,7 +1645,7 @@ function loadQoSHistory() {
             console.error('Error al cargar historial QoS:', error);
             const tableBody = document.getElementById('qosHistoryTableBody');
             if (tableBody) {
-                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e74c3c;">Error al cargar historial</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #e74c3c;">Error al cargar historial</td></tr>';
             }
         });
 }
@@ -1667,7 +1668,7 @@ function renderQoSHistoryPage() {
     
     // Si no hay datos
     if (allQoSMetrics.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No hay mediciones registradas</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center;">No hay mediciones registradas</td></tr>';
         paginationContainer.innerHTML = '';
         return;
     }
@@ -1726,6 +1727,9 @@ metricsToShow.forEach(metric => {
                     </span>` 
                     : '<span style="color:#999; font-size:13px;">—</span>'
                 }</td>
+            <td>${metric.predictedConfidence != null
+                    ? `<strong>${Math.round(metric.predictedConfidence * 100)}%</strong>`
+                    : '<span style="color:#999; font-size:13px;">—</span>'}</td>
             </tr>
     `;
 });

@@ -1086,10 +1086,12 @@
                 <th>Pérdida (%)</th>
                 <th>MOS Score</th>
                 <th>Estado</th>
+                <th>🤖 ML Predicción</th>
+                <th>🎯 Confianza ML</th>
             </tr>
         </thead>
         <tbody id="qosTableBody">
-            <tr><td colspan="7" style="text-align:center;">Cargando...</td></tr>
+            <tr><td colspan="9" style="text-align:center;">Cargando...</td></tr>
         </tbody>
     </table>
     <div id="qosPaginationContainer" style="margin-top: 15px; text-align: center;"></div>
@@ -1619,7 +1621,7 @@ function loadQoSReadOnly() {
         })
         .catch(() => {
             const tbody = document.getElementById('qosTableBody');
-            if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#e74c3c;">Error al cargar datos QoS.</td></tr>';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#e74c3c;">Error al cargar datos QoS.</td></tr>';
         });
 }
 
@@ -1629,7 +1631,7 @@ function renderQoSUserTable() {
     if (!tbody) return;
 
     if (!allQoSUser.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No hay mediciones registradas.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">No hay mediciones registradas.</td></tr>';
         if (pagination) pagination.innerHTML = '';
         return;
     }
@@ -1656,6 +1658,13 @@ function renderQoSUserTable() {
                 <td>${m.packetLossPercent.toFixed(2)}</td>
                 <td><strong>${m.mosScore.toFixed(2)}</strong></td>
                 <td><span class="qos-status-badge ${sc}">${statusEmoji[sc] || '🔴'} ${statusLabel[sc] || m.qualityStatus}</span></td>
+                <td>${m.predictedStatus
+                        ? `<span class="qos-status-badge ${(m.predictedStatus || '').toLowerCase().replace(/[\s_]/g,'-').replace(/[éí]/g, c => c==='é'?'e':'i')}"
+                            title="Predicción de estado en próxima medición">${m.predictedStatus}</span>`
+                        : '<span style="color:#999;font-size:13px;">—</span>'}</td>
+                <td>${m.predictedConfidence != null
+                        ? `<strong>${Math.round(m.predictedConfidence * 100)}%</strong>`
+                        : '<span style="color:#999;font-size:13px;">—</span>'}</td>
             </tr>`;
     });
     tbody.innerHTML = html;

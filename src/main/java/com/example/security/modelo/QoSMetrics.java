@@ -72,6 +72,10 @@ public class QoSMetrics {
     @Column(name = "predicted_status")
     private String predictedStatus;
 
+    // Confianza de la predicción ML (0.0 - 1.0)
+    @Column(name = "predicted_confidence")
+    private Double predictedConfidence;
+
     // Constructores
     public QoSMetrics() {
         this.timestamp = LocalDateTime.now();
@@ -212,6 +216,14 @@ public class QoSMetrics {
 
     public void setPredictedStatus(String predictedStatus) {
         this.predictedStatus = predictedStatus;
+    }
+
+    public Double getPredictedConfidence() {
+        return predictedConfidence;
+    }
+
+    public void setPredictedConfidence(Double predictedConfidence) {
+        this.predictedConfidence = predictedConfidence;
     }
 
     @Override

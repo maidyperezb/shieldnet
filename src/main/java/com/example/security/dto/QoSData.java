@@ -20,6 +20,7 @@ public class QoSData {
 
     // Predicción del modelo ML
     private String predictedStatus;
+    private Double predictedConfidence;
 
     public QoSData() {
     }
@@ -152,6 +153,14 @@ public class QoSData {
 
     public void setPredictedStatus(String predictedStatus) {
         this.predictedStatus = predictedStatus;
+    }
+
+    public Double getPredictedConfidence() {
+        return predictedConfidence;
+    }
+
+    public void setPredictedConfidence(Double predictedConfidence) {
+        this.predictedConfidence = predictedConfidence;
     }
 
     @Override
