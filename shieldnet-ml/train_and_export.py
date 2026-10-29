@@ -10,6 +10,7 @@ va a ser peor, igual o mejor que la actual?
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 import pickle
@@ -205,12 +206,72 @@ def generate_synthetic_trends(n=800):
 
     return pd.DataFrame(records)
 
+# ── Muestras de transición (fronteras entre clases) ───────────
+def generate_transition_trends(n=250):
+    """
+    Genera muestras en las ZONAS FRONTERA entre clases, con etiqueta
+    ruidosa. Sin estas muestras las clases quedan disjuntas y el
+    RandomForest aprende 'islas' perfectamente separables, lo que
+    produce probabilidades sobreconfiadas (≈100%) en predicción.
+    """
+    np.random.seed(7)
+    records = []
+
+    for _ in range(n):
+        # Valores en los rangos donde las clases se solapan
+        mos_act   = np.random.uniform(3.3, 4.2)
+        mos_ant   = np.clip(mos_act + np.random.uniform(-0.3, 0.3), 1.0, 5.0)
+        jit_act   = np.random.uniform(12, 70)
+        jit_ant   = max(0, jit_act + np.random.uniform(-20, 20))
+        lat_act   = np.random.uniform(40, 200)
+        lat_ant   = max(0, lat_act + np.random.uniform(-50, 50))
+        loss      = np.random.uniform(0, 3)
+
+        # Etiqueta por umbrales de MOS futuro + ruido para simular
+        # ambigüedad real en la frontera
+        future_mos = mos_act + np.random.uniform(-0.2, 0.2)
+        if future_mos >= 4.0:
+            label = 'ESTABLE'
+        elif future_mos >= 3.6:
+            label = 'EN RIESGO'
+        elif future_mos >= 3.0:
+            label = 'DEGRADANDO'
+        else:
+            label = 'CRITICO'
+
+        # 15% de las muestras frontera reciben la etiqueta de una
+        # clase vecina (la realidad es incierta en estos puntos)
+        vecinos = {
+            'ESTABLE': ['EN RIESGO'],
+            'EN RIESGO': ['ESTABLE', 'DEGRADANDO'],
+            'DEGRADANDO': ['EN RIESGO', 'CRITICO'],
+            'CRITICO': ['DEGRADANDO'],
+        }
+        if np.random.rand() < 0.15:
+            label = np.random.choice(vecinos[label])
+
+        records.append({
+            'mos_actual':     mos_act,
+            'mos_anterior':   mos_ant,
+            'delta_mos':      mos_act - mos_ant,
+            'jitter_actual':  jit_act,
+            'delta_jitter':   jit_act - jit_ant,
+            'latency_actual': lat_act,
+            'delta_latency':  lat_act - lat_ant,
+            'packet_loss':    loss,
+            'future_label':   label,
+        })
+
+    return pd.DataFrame(records)
+
 # ── Construir dataset ─────────────────────────────────────────
 print("Construyendo dataset de tendencias...")
-df_trend_real  = build_trend_features(df_base)
-df_trend_synth = generate_synthetic_trends(800)
+df_trend_real   = build_trend_features(df_base)
+df_trend_synth  = generate_synthetic_trends(800)
+df_trend_border = generate_transition_trends(250)
 
-df_all = pd.concat([df_trend_real, df_trend_synth], ignore_index=True)
+df_all = pd.concat([df_trend_real, df_trend_synth, df_trend_border],
+                   ignore_index=True)
 print(f"Total registros: {len(df_all)}")
 print(f"Distribución:\n{df_all['future_label'].value_counts()}\n")
 
@@ -230,7 +291,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 
 # Random Forest: mejor que Decision Tree para tendencias
-clf = RandomForestClassifier(
+rf = RandomForestClassifier(
     n_estimators=100,
     max_depth=8,
     min_samples_split=5,
@@ -238,6 +299,12 @@ clf = RandomForestClassifier(
     random_state=42,
     class_weight='balanced'
 )
+
+# Calibración Platt (sigmoid): sin ella, max(predict_proba) es el
+# voto bruto de los árboles y da ≈100% en cualquier dato dentro de
+# una región dominante. La calibración transforma ese voto en una
+# probabilidad honesta (validada con validación cruzada).
+clf = CalibratedClassifierCV(estimator=rf, method='sigmoid', cv=5)
 clf.fit(X_train, y_train)
 
 y_pred = clf.predict(X_test)
@@ -247,9 +314,14 @@ print(f"Exactitud: {acc * 100:.1f}%\n")
 print("Reporte por clase:")
 print(classification_report(y_test, y_pred))
 
-# Importancia de features
+# Importancia de features (promedio de los RF ajustados en cada fold
+# de la calibración; CalibratedClassifierCV no expone feature_importances_)
+importances = np.mean(
+    [c.estimator.feature_importances_ for c in clf.calibrated_classifiers_],
+    axis=0
+)
 print("\nImportancia de features:")
-for feat, imp in sorted(zip(FEATURES, clf.feature_importances_), key=lambda x: -x[1]):
+for feat, imp in sorted(zip(FEATURES, importances), key=lambda x: -x[1]):
     print(f"  {feat:20s}: {imp:.3f}")
 
 # ── Exportar modelo ───────────────────────────────────────────
@@ -272,6 +344,7 @@ metadata = {
     "features": FEATURES,
     "accuracy": round(acc, 4),
     "trained_on": len(df_all),
+    "calibration": "sigmoid (Platt) vía CalibratedClassifierCV",
     "thresholds": {
         "ESTABLE":    {"mos_futuro_min": 4.0},
         "EN RIESGO":  {"mos_futuro_min": 3.6, "mos_futuro_max": 4.0},

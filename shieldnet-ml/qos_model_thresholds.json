@@ -24,8 +24,9 @@
     "delta_latency",
     "packet_loss"
   ],
-  "accuracy": 0.9708,
-  "trained_on": 852,
+  "accuracy": 0.8869,
+  "trained_on": 1102,
+  "calibration": "sigmoid (Platt) vía CalibratedClassifierCV",
   "thresholds": {
     "ESTABLE": {
       "mos_futuro_min": 4.0
