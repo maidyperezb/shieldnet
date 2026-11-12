@@ -3771,11 +3771,20 @@ async function ejecutarModelo() {
         const response = await fetch('/api/optimizacion');
         const data = await response.json();
 
-        // data.resultado es el string JSON que devolvió Python → lo parseamos
-        const resultado = JSON.parse(data.resultado);
+        // Errores del servidor (script no encontrado, salida no-JSON, exit != 0)
+        if (!response.ok || data.success === false) {
+            alert('Error ejecutando el modelo: ' + (data.error || ('HTTP ' + response.status)));
+            return;
+        }
 
-        if (!resultado.success) {
-            alert('El modelo no encontró solución: ' + resultado.error);
+        // data.resultado llega como objeto JSON; se acepta también string
+        // por compatibilidad con respuestas en crudo.
+        const resultado = typeof data.resultado === 'string'
+            ? JSON.parse(data.resultado)
+            : data.resultado;
+
+        if (!resultado || !resultado.success) {
+            alert('El modelo no encontró solución: ' + (resultado && resultado.error));
             return;
         }
 
