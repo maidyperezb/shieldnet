@@ -21,17 +21,20 @@
 =============================================================
 """
 
+import os
 import sys
 import json
 import pymysql
 from scipy.optimize import linprog
 
+# La conexión se lee del entorno (mismas variables que usa Spring en .env)
+# para no tener credenciales hardcodeadas ni duplicadas en el repositorio.
 DB_CONFIG = {
-    "host": "127.0.0.1",
-    "port": 3306,
-    "user": "root",
-    "password": "",
-    "db": "shieldnet",
+    "host": os.environ.get("MYSQL_HOST", "127.0.0.1"),
+    "port": int(os.environ.get("MYSQL_PORT", "3306")),
+    "user": os.environ.get("MYSQL_USERNAME", "root"),
+    "password": os.environ.get("MYSQL_PASSWORD", ""),
+    "database": os.environ.get("MYSQL_DATABASE", "shieldnet"),
     "charset": "utf8mb4"
 }
 
