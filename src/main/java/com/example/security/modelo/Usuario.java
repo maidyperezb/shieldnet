@@ -39,7 +39,16 @@ public class Usuario {
     
     @Column(name = "ultimo_acceso")
     private LocalDateTime ultimoAcceso;
-    
+
+    /**
+     * Estado de la cuenta. La columna se crea con DEFAULT TRUE para que los
+     * usuarios existentes queden activos tras la actualización del esquema
+     * (ddl-auto=update no rellena con el valor inicial de Java las filas
+     * preexistentes, por eso el default vive en el DDL).
+     */
+    @Column(name = "activo", nullable = false, columnDefinition = "BOOLEAN NOT NULL DEFAULT TRUE")
+    private boolean activo = true;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "roles", joinColumns = @JoinColumn(name = "usuario_id"))
     @Column(name = "rol")
@@ -124,6 +133,14 @@ public class Usuario {
 
     public void setUltimoAcceso(LocalDateTime ultimoAcceso) {
         this.ultimoAcceso = ultimoAcceso;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
     }
 
     public Set<String> getRoles() {

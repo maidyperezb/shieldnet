@@ -3,6 +3,7 @@ package com.example.security.controller;
 import java.security.Principal;
 import java.util.HashSet;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,23 +49,44 @@ public class UsuarioController {
         }
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteUsuario(@PathVariable Long id) {
+    /**
+     * Desactiva un usuario sin eliminar su registro. El usuario deja de poder
+     * iniciar sesión; su historial y relaciones se conservan. La operación es
+     * reversible mediante PATCH /{id}/reactivar.
+     */
+    @PatchMapping("/{id}/desactivar")
+    public ResponseEntity<?> desactivarUsuario(@PathVariable Long id) {
         try {
-            // Obtener username antes de borrar para el log
-            String username = "";
-            try {
-                username = userService.findById(id).getUsername();
-            } catch (Exception ignored) {}
-
-            userService.delete(id);
+            Usuario usuario = userService.desactivarUsuario(id);
             eventoService.registrarEvento(
-                "Eliminación de usuario: " + username + " (ID: " + id + ")"
+                "Usuario desactivado: " + usuario.getUsername() + " (ID: " + id + ")"
             );
-            return ResponseEntity.noContent().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body("Usuario no encontrado con ID: " + id);
+            return ResponseEntity.ok(usuario);
+        } catch (IllegalStateException e) {
+            // Transición inválida: ya estaba inactivo
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
+    }
+
+    /**
+     * Reactiva un usuario previamente desactivado. Recupera el acceso al
+     * inicio de sesión conservando el mismo registro, credenciales y roles.
+     */
+    @PatchMapping("/{id}/reactivar")
+    public ResponseEntity<?> reactivarUsuario(@PathVariable Long id) {
+        try {
+            Usuario usuario = userService.reactivarUsuario(id);
+            eventoService.registrarEvento(
+                "Usuario reactivado: " + usuario.getUsername() + " (ID: " + id + ")"
+            );
+            return ResponseEntity.ok(usuario);
+        } catch (IllegalStateException e) {
+            // Transición inválida: ya estaba activo
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         }
     }
 

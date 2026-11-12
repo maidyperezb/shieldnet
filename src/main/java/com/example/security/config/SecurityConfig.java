@@ -28,7 +28,8 @@ public class SecurityConfig {
     
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
-                                         DaoAuthenticationProvider authenticationProvider) throws Exception {
+                                         DaoAuthenticationProvider authenticationProvider,
+                                         FiltroUsuarioInactivo filtroUsuarioInactivo) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
@@ -45,6 +46,12 @@ public class SecurityConfig {
                 .requestMatchers("/admin/**").hasRole("ADMIN")
                 // Rutas de usuario
                 .requestMatchers("/user/**").hasRole("USER")
+                // Gestión de estados de usuarios y MACs: exclusiva de administradores
+                // (desactivar/reactivar cambia estado; POST /api/macs puede reactivar
+                // una MAC existente y sincroniza el estado de los dispositivos)
+                .requestMatchers("/api/usuarios/*/desactivar", "/api/usuarios/*/reactivar",
+                                 "/api/macs/*/desactivar", "/api/macs/*/reactivar").hasRole("ADMIN")
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/macs").hasRole("ADMIN")
                 // Todo lo demás requiere autenticación
                 .anyRequest().authenticated()
             )
@@ -57,6 +64,8 @@ public class SecurityConfig {
                 .logoutSuccessUrl("/login?logout")
                 .permitAll()
             )
+            // Antes de autorizar: las cuentas desactivadas no usan sus sesiones abiertas
+            .addFilterBefore(filtroUsuarioInactivo, org.springframework.security.web.access.intercept.AuthorizationFilter.class)
             .authenticationProvider(authenticationProvider);
             
         return http.build();

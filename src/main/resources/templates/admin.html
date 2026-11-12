@@ -972,7 +972,7 @@
             <!-- Stats Cards -->
             <div class="stats-container">
                 <div class="stat-card">
-                    <h3>Usuarios Registrados</h3>
+                    <h3>Usuarios Activos</h3>
                     <div class="stat-value" id="userCount"></div>
                 </div>
                 <!-- Nueva tarjeta de Dispositivos Conectados -->
@@ -1127,15 +1127,20 @@
     </div>
 </div>
 
-<!-- Modal Eliminar Usuario -->
-<div class="modal" id="deleteUserModal">
+<!-- Modal Desactivar Usuario -->
+<div class="modal" id="deactivateUserModal">
     <div class="modal-content">
-        <span class="close-modal" onclick="closeDeleteUserModal()">&times;</span>
-        <h3>Eliminar Usuario</h3>
-        <p>¿Está seguro que desea eliminar el usuario <span id="deleteUserName"></span>?</p>
+        <span class="close-modal" onclick="closeDeactivateUserModal()">&times;</span>
+        <h3>Desactivar Usuario</h3>
+        <p>¿Desea desactivar al usuario <span id="deactivateUserName"></span>?</p>
+        <ul style="text-align: left; margin: 15px 0; padding-left: 20px; color: #555; font-size: 14px; line-height: 1.8;">
+            <li>La cuenta dejará de poder iniciar sesión.</li>
+            <li>Su historial y registros se conservarán.</li>
+            <li>La operación puede revertirse reactivando la cuenta.</li>
+        </ul>
         <div style="display: flex; justify-content: space-between; margin-top: 25px;">
-            <button class="btn btn-primary" onclick="closeDeleteUserModal()">Cancelar</button>
-            <button class="btn btn-danger" onclick="confirmDeleteUser()">Eliminar</button>
+            <button class="btn btn-primary" onclick="closeDeactivateUserModal()">Cancelar</button>
+            <button class="btn btn-danger" onclick="confirmDeactivateUser()">Desactivar</button>
         </div>
     </div>
 </div>
@@ -1172,6 +1177,16 @@
                     <option value="ROLE_USER">Usuario</option>
                     <option value="ROLE_ADMIN">Administrador</option>
                 </select>
+            </div>
+            <div class="form-group">
+                <label for="editEstado">Estado de la cuenta</label>
+                <select id="editEstado" name="activo" required>
+                    <option value="true">Activo (puede iniciar sesión)</option>
+                    <option value="false">Inactivo (acceso bloqueado)</option>
+                </select>
+                <small style="display: block; margin-top: 4px; color: #888;">
+                    Al cambiar el estado se bloqueará o restablecerá el acceso al inicio de sesión (reversible).
+                </small>
             </div>
             <button type="submit" class="btn btn-primary">
                 <i class="fas fa-save"></i> Guardar Cambios
@@ -1325,14 +1340,14 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('createUserModal').style.display = 'none';
     }
 
-    function openDeleteUserModal(userId, userName) {
+    function openDeactivateUserModal(userId, userName) {
         currentUserId = userId;
-        document.getElementById('deleteUserName').textContent = userName;
-        document.getElementById('deleteUserModal').style.display = 'block';
+        document.getElementById('deactivateUserName').textContent = userName;
+        document.getElementById('deactivateUserModal').style.display = 'block';
     }
 
-    function closeDeleteUserModal() {
-        document.getElementById('deleteUserModal').style.display = 'none';
+    function closeDeactivateUserModal() {
+        document.getElementById('deactivateUserModal').style.display = 'none';
     }
 
     // Cargar contenido del panel principal
@@ -1344,7 +1359,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <!-- Stats Cards -->
         <div class="stats-container">
             <div class="stat-card">
-                <h3>Usuarios Registrados</h3>
+                <h3>Usuarios Activos</h3>
                 <div class="stat-value" id="userCount"></div>
             </div>
             <div class="stat-card devices-stat-card">
@@ -2449,7 +2464,6 @@ document.addEventListener('click', function(e) {
 
 let currentUserPage = 1;
 const usersPerPage = 5;
-let currentUserFilter = 'todos';
 let allUsers = []; 
 let filteredUsers = [];
 let currentUserId = null;
@@ -2465,6 +2479,12 @@ function loadUserManagement() {
                     <option value="todos">Todos</option>
                     <option value="administradores">Administradores</option>
                     <option value="usuarios">Usuarios</option>
+                </select>
+                <label for="userStatusFilter" style="margin: 0;">Estado:</label>
+                <select id="userStatusFilter" onchange="applyUserFilters()" class="form-select" style="width: 130px;">
+                    <option value="todos">Todos</option>
+                    <option value="activos">Activos</option>
+                    <option value="inactivos">Inactivos</option>
                 </select>
             </div>
         </div>
@@ -2553,12 +2573,13 @@ function loadUserManagement() {
                     <th>Apellido</th>
                     <th>Email</th>
                     <th>Rol</th>
+                    <th>Estado</th>
                     <th>Último Acceso</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
             <tbody id="userTableBody">
-                <tr><td colspan="7" style="text-align: center;">Cargando...</td></tr>
+                <tr><td colspan="8" style="text-align: center;">Cargando...</td></tr>
             </tbody>
         </table>
         <div id="userPaginationContainer" style="margin-top: 15px; text-align: center;"></div>
@@ -2577,12 +2598,13 @@ setTimeout(() => {
 
 function applyUserFilters() {
     const roleFilter = document.getElementById('userRoleFilter').value;
+    const statusFilter = document.getElementById('userStatusFilter') ? document.getElementById('userStatusFilter').value : 'todos';
     const usernameFilter = document.getElementById('filterUsername') ? document.getElementById('filterUsername').value.toLowerCase().trim() : '';
     const nombreFilter = document.getElementById('filterNombre') ? document.getElementById('filterNombre').value.toLowerCase().trim() : '';
     const apellidoFilter = document.getElementById('filterApellido') ? document.getElementById('filterApellido').value.toLowerCase().trim() : '';
     const emailFilter = document.getElementById('filterEmail') ? document.getElementById('filterEmail').value.toLowerCase().trim() : '';
     
-    console.log('Aplicando filtros:', { roleFilter, usernameFilter, nombreFilter, apellidoFilter, emailFilter });
+    console.log('Aplicando filtros:', { roleFilter, statusFilter, usernameFilter, nombreFilter, apellidoFilter, emailFilter });
     console.log('Total usuarios antes de filtrar:', allUsers.length);
     
     // Partir de todos los usuarios
@@ -2595,6 +2617,13 @@ function applyUserFilters() {
     } else if (roleFilter === 'usuarios') {
         result = result.filter(user => 
             !user.roles || !user.roles.includes('ROLE_ADMIN'));
+    }
+    
+    // Aplicar filtro de estado (activo/inactivo)
+    if (statusFilter === 'activos') {
+        result = result.filter(user => user.activo !== false);
+    } else if (statusFilter === 'inactivos') {
+        result = result.filter(user => user.activo === false);
     }
     
     // Aplicar filtros de búsqueda
@@ -2636,12 +2665,14 @@ function applyUserFilters() {
 
 function clearUserFilters() {
     const roleFilterEl = document.getElementById('userRoleFilter');
+    const statusFilterEl = document.getElementById('userStatusFilter');
     const usernameFilterEl = document.getElementById('filterUsername');
     const nombreFilterEl = document.getElementById('filterNombre');
     const apellidoFilterEl = document.getElementById('filterApellido');
     const emailFilterEl = document.getElementById('filterEmail');
     
     if (roleFilterEl) roleFilterEl.value = 'todos';
+    if (statusFilterEl) statusFilterEl.value = 'todos';
     if (usernameFilterEl) usernameFilterEl.value = '';
     if (nombreFilterEl) nombreFilterEl.value = '';
     if (apellidoFilterEl) apellidoFilterEl.value = '';
@@ -2663,7 +2694,7 @@ function renderUserTable() {
     console.log('Renderizando tabla con', filteredUsers.length, 'usuarios filtrados');
     
     if (filteredUsers.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No se encontraron usuarios</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No se encontraron usuarios</td></tr>';
         paginationContainer.innerHTML = '';
         return;
     }
@@ -2681,6 +2712,18 @@ function renderUserTable() {
     usersToShow.forEach(user => {
         const rolText = user.roles && user.roles.includes('ROLE_ADMIN') ? 'Administrador' : 'Usuario';
         const ultimoAcceso = user.ultimoAcceso || 'Nunca';
+        const activo = user.activo !== false;
+        const estadoBadge = activo
+            ? '<span class="status-tag status-active">Activo</span>'
+            : '<span class="status-tag status-inactive">Inactivo</span>';
+        // Solo se ofrece la acción aplicable: desactivar activos o reactivar inactivos
+        const botonEstado = activo
+            ? `<button class="btn btn-danger action-btn" onclick="openDeactivateUserModal(${user.id}, '${user.username}')" title="Desactivar usuario">
+                        <i class="fas fa-user-slash"></i>
+                    </button>`
+            : `<button class="btn btn-success action-btn" onclick="reactivateUser(${user.id}, '${user.username}')" title="Reactivar usuario">
+                        <i class="fas fa-user-check"></i>
+                    </button>`;
         
         html += `
             <tr>
@@ -2689,14 +2732,13 @@ function renderUserTable() {
                 <td>${user.apellido}</td>
                 <td>${user.email}</td>
                 <td><span class="status-tag ${user.roles && user.roles.includes('ROLE_ADMIN') ? 'status-active' : ''}">${rolText}</span></td>
+                <td>${estadoBadge}</td>
                 <td>${ultimoAcceso}</td>
                 <td>
                     <button class="btn btn-primary action-btn" onclick="openEditUserModal(${user.id})" title="Editar usuario">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn btn-danger action-btn" onclick="openDeleteUserModal(${user.id}, '${user.username}')" title="Eliminar usuario">
-                        <i class="fas fa-trash-alt"></i>
-                    </button>
+                    ${botonEstado}
                 </td>
             </tr>
         `;
@@ -2787,7 +2829,7 @@ function loadUsersFromDatabase() {
             console.error('Error cargando usuarios:', error);
             const tableBody = document.getElementById('userTableBody');
             if (tableBody) {
-                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #e74c3c;">Error al cargar usuarios</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #e74c3c;">Error al cargar usuarios</td></tr>';
             }
         });
 }
@@ -2819,6 +2861,7 @@ function openEditUserModal(userId) {
     document.getElementById('editApellido').value = user.apellido;
     document.getElementById('editEmail').value = user.email;
     document.getElementById('editRol').value = user.roles && user.roles.includes('ROLE_ADMIN') ? 'ROLE_ADMIN' : 'ROLE_USER';
+    document.getElementById('editEstado').value = user.activo === false ? 'false' : 'true';
     document.getElementById('editPassword').value = '';
     
     console.log('Formulario rellenado');
@@ -2853,11 +2896,16 @@ function updateUser() {
     const apellido = document.getElementById('editApellido').value;
     const email = document.getElementById('editEmail').value;
     const rol = document.getElementById('editRol').value;
+    const estado = document.getElementById('editEstado').value;
     
     if (!username || !nombre || !apellido || !email) {
         alert('Por favor, complete todos los campos obligatorios');
         return;
     }
+    
+    // Estado actual guardado para detectar si hubo un cambio
+    const usuarioOriginal = allUsers.find(u => u.id == editingUserId);
+    const estadoOriginal = usuarioOriginal && usuarioOriginal.activo === false ? 'false' : 'true';
     
     const usuarioActualizado = {
         id: editingUserId,
@@ -2882,23 +2930,49 @@ function updateUser() {
     })
     .then(response => {
         if (!response.ok) {
-            throw new Error('Error al actualizar usuario');
+            return response.text().then(texto => {
+                throw new Error(texto || 'Error al actualizar usuario');
+            });
         }
         return response.json();
     })
     .then(data => {
-        document.getElementById('editUserResult').textContent = '✓ Usuario actualizado correctamente';
-        document.getElementById('editUserResult').className = 'success-message';
-        document.getElementById('editUserResult').style.display = 'block';
+        // Sin cambio de estado: solo datos editados
+        if (estado === estadoOriginal) {
+            document.getElementById('editUserResult').textContent = '✓ Usuario actualizado correctamente';
+            document.getElementById('editUserResult').className = 'success-message';
+            document.getElementById('editUserResult').style.display = 'block';
+            
+            setTimeout(() => {
+                closeEditUserModal();
+                loadUsersFromDatabase();
+            }, 1500);
+            
+            registrarActividad(`Actualización de usuario: ${username}`);
+            return;
+        }
         
-        // Recargar usuarios
-        setTimeout(() => {
-            closeEditUserModal();
-            loadUsersFromDatabase();
-        }, 1500);
-        
-        // Registrar actividad
-        registrarActividad(`Actualización de usuario: ${username}`);
+        // Cambio de estado: usar el endpoint dedicado (con auditoría en el backend)
+        const reactivar = estado === 'true';
+        const accion = reactivar ? 'reactivar' : 'desactivar';
+        return fetch(`/api/usuarios/${editingUserId}/${accion}`, { method: 'PATCH' })
+            .then(respuesta => respuesta.text().then(mensaje => {
+                if (!respuesta.ok) {
+                    throw new Error(mensaje || `Error al ${accion} el usuario`);
+                }
+                document.getElementById('editUserResult').textContent = reactivar
+                    ? '✓ Usuario actualizado y reactivado correctamente'
+                    : '✓ Usuario actualizado y desactivado correctamente';
+                document.getElementById('editUserResult').className = 'success-message';
+                document.getElementById('editUserResult').style.display = 'block';
+                
+                setTimeout(() => {
+                    closeEditUserModal();
+                    loadUsersFromDatabase();
+                }, 1500);
+                
+                registrarActividad(`Actualización de usuario: ${username}`);
+            }));
     })
     .catch(error => {
         console.error('Error:', error);
@@ -2971,78 +3045,6 @@ function filterLogs(filterType) {
     currentLogFilter = filterType;
     updateLogsTable(filterType);
 }
-
-// Actualizar tabla de logs con filtro
-function updateLogsTable(filterType = currentLogFilter) {
-    let tableBody = document.getElementById('logsTableBody');
-    if (!tableBody) return; // Si no existe la tabla, salir
-    
-    // Asegurarse que los logs existan
-    if (!logsActividad || !Array.isArray(logsActividad)) {
-        console.error('Error: logsActividad no es un array válido');
-        return;
-    }
-
-    // Aplicar filtro según el tipo seleccionado
-   let filteredLogs = [];
-    
-if (filterType === 'todos') {
-    filteredLogs = logsActividad;
-} else if (filterType === 'ping') {
-    filteredLogs = logsActividad.filter(log => 
-        log.descripcion && log.descripcion.toLowerCase().includes('ping'));
-} else if (filterType === 'escaneos') {
-    filteredLogs = logsActividad.filter(log => 
-        log.descripcion && (
-            log.descripcion.toLowerCase().includes('escan') || 
-            log.descripcion.toLowerCase().includes('puerto')
-        )
-    );
-} else if (filterType === 'dispositivos') {
-    filteredLogs = logsActividad.filter(log =>
-        log.descripcion && (
-            log.descripcion.toLowerCase().includes('dispositivo') ||
-            log.descripcion.toLowerCase().includes('escaneo manual') ||
-            log.descripcion.toLowerCase().includes('mac') ||
-            log.descripcion.toLowerCase().includes('red')
-        )
-    );
-} else if (filterType === 'usuarios') {
-    filteredLogs = logsActividad.filter(log =>
-        log.descripcion && (
-            log.descripcion.toLowerCase().includes('usuario') ||
-            log.descripcion.toLowerCase().includes('creación') ||
-            log.descripcion.toLowerCase().includes('eliminación') ||
-            log.descripcion.toLowerCase().includes('edición')
-        )
-    );
-} else if (filterType === 'qos') {
-    filteredLogs = logsActividad.filter(log =>
-        log.descripcion && log.descripcion.toLowerCase().includes('qos')
-    );
-}
-
-    // Generar HTML para la tabla
-    let html = '';
-    if (filteredLogs.length === 0) {
-        html = `<tr><td colspan="4" style="text-align: center;">No hay logs disponibles</td></tr>`;
-    } else {
-        for (let log of filteredLogs) {
-            html += `
-                <tr>
-                    <td>${log.ip || '-'}</td>
-                    <td>${log.fecha || '-'}</td>
-                    <td>${log.hora || '-'}</td>
-                    <td>${log.descripcion || '-'}</td>
-                </tr>
-            `;
-        }
-    }
-
-    // Actualizar la tabla
-    tableBody.innerHTML = html;
-}
-
 
 // Variable global para almacenar todos los dispositivos
 let dispositivosConectados = [];
@@ -3240,6 +3242,20 @@ function loadMacsAutorizadas() {
 
             let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
             data.forEach(m => {
+                const activa = m.activo !== false;
+                const estadoBadge = activa
+                    ? '<span class="status-tag status-active">Activa</span>'
+                    : '<span class="status-tag status-inactive">Inactiva</span>';
+                // Solo la acción aplicable: desactivar activas o reactivar inactivas
+                const botonEstado = activa
+                    ? `<button onclick="desactivarMacAutorizada(${m.id})" class="btn btn-danger"
+                                style="padding: 5px 10px; font-size: 13px;" title="Desactivar MAC">
+                            <i class="fas fa-ban"></i>
+                        </button>`
+                    : `<button onclick="reactivarMacAutorizada(${m.id})" class="btn btn-success"
+                                style="padding: 5px 10px; font-size: 13px;" title="Reactivar MAC">
+                            <i class="fas fa-undo"></i>
+                        </button>`;
                 html += `
                     <div style="display: flex; align-items: center; gap: 10px; background: white; 
                                 padding: 10px 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
@@ -3247,18 +3263,19 @@ function loadMacsAutorizadas() {
                             ${m.mac}
                         </span>
                         <span style="flex: 1; color: #666; font-size: 14px;">${m.descripcion || ''}</span>
+                        ${estadoBadge}
                         <span style="font-size: 12px; color: #999;">${new Date(m.fechaRegistro).toLocaleDateString()}</span>
-                        <button onclick="eliminarMacAutorizada(${m.id})" class="btn btn-danger" 
-                                style="padding: 5px 10px; font-size: 13px;">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                        ${botonEstado}
                     </div>
                 `;
             });
             html += '</div>';
             container.innerHTML = html;
         })
-        .catch(err => console.error('Error cargando MACs:', err));
+        .catch(err => {
+            console.error('Error cargando MACs:', err);
+            showTemporaryMessage('Error cargando MACs: ' + err.message, 'error');
+        });
 }
 
 // Agregar MAC autorizada
@@ -3290,17 +3307,44 @@ function agregarMacAutorizada() {
     .catch(err => alert('Error: ' + err.message));
 }
 
-// Eliminar MAC autorizada
-function eliminarMacAutorizada(id) {
-    if (!confirm('¿Eliminar esta MAC de la lista de autorizadas?')) return;
+// Desactivar MAC autorizada (el registro se conserva y puede reactivarse)
+function desactivarMacAutorizada(id) {
+    if (!confirm('¿Desactivar esta MAC? El registro se conservará como inactiva y podrá reactivarse.')) return;
 
-    fetch(`/api/macs/${id}`, { method: 'DELETE' })
+    fetch(`/api/macs/${id}/desactivar`, { method: 'PATCH' })
+        .then(r => {
+            if (!r.ok) return r.text().then(t => { throw new Error(t || `Error HTTP ${r.status}`); });
+            return r.text();
+        })
         .then(() => {
             loadMacsAutorizadas();
             loadDevicesFromDatabase();
-            showTemporaryMessage('✓ MAC eliminada');
+            showTemporaryMessage('✓ MAC desactivada. El registro se conserva.');
         })
-        .catch(err => console.error('Error eliminando MAC:', err));
+        .catch(err => {
+            console.error('Error desactivando MAC:', err);
+            showTemporaryMessage('Error al desactivar MAC: ' + err.message, 'error');
+        });
+}
+
+// Reactivar MAC autorizada previamente desactivada
+function reactivarMacAutorizada(id) {
+    if (!confirm('¿Reactivar esta MAC? Sus dispositivos volverán a quedar autorizados.')) return;
+
+    fetch(`/api/macs/${id}/reactivar`, { method: 'PATCH' })
+        .then(r => {
+            if (!r.ok) return r.text().then(t => { throw new Error(t || `Error HTTP ${r.status}`); });
+            return r.text();
+        })
+        .then(() => {
+            loadMacsAutorizadas();
+            loadDevicesFromDatabase();
+            showTemporaryMessage('✓ MAC reactivada. Sus dispositivos quedan autorizados.');
+        })
+        .catch(err => {
+            console.error('Error reactivando MAC:', err);
+            showTemporaryMessage('Error al reactivar MAC: ' + err.message, 'error');
+        });
 }
 
 // Variable global arriba del todo junto a las demás variables globales
@@ -3466,82 +3510,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
    
-function updateUserTable() {
-    let tableBody = document.getElementById('userTableBody');
-    let paginationContainer = document.getElementById('userPaginationContainer');
-    
-    if(!tableBody || !paginationContainer) return;
-    
-    // Verificar que los usuarios existan
-    if (!users || !Array.isArray(users)) {
-        console.error('Error: users no es un array válido');
-        return;
-    }
-    
-    // 1. Aplicar filtro según el tipo seleccionado
-    let filteredUsers = [];
-    
-    if (currentUserFilter === 'todos') {
-        filteredUsers = users;
-    } else if (currentUserFilter === 'administradores') {
-        filteredUsers = users.filter(user => 
-            user.roles && user.roles.includes('ROLE_ADMIN'));
-    } else if (currentUserFilter === 'usuarios') {
-        filteredUsers = users.filter(user => 
-            !user.roles || !user.roles.includes('ROLE_ADMIN'));
-    }
-    
-    // 2. Calcular paginación
-    const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
-    const start = (currentUserPage - 1) * usersPerPage;
-    const end = start + usersPerPage;
-    const usersToShow = filteredUsers.slice(start, end);
-    
-    // 3. Generar HTML de tabla solo para usuarios actuales
-    let html = '';
-    if (usersToShow.length === 0) {
-        html = `<tr><td colspan="7" style="text-align: center;">No hay usuarios disponibles</td></tr>`;
-    } else {
-        for (let user of usersToShow) {
-            html += `
-                <tr>
-                    <td>${user.username}</td>
-                    <td>${user.nombre}</td>
-                    <td>${user.apellido}</td>
-                    <td>${user.email}</td>
-                    <td>${user.roles && user.roles.includes('ROLE_ADMIN') ? 'Administrador' : 'Usuario'}</td>
-                    <td>${user.ultimoAcceso || 'Nunca'}</td>
-                    <td>
-                        <button class="btn btn-danger action-btn" onclick="openDeleteUserModal(${user.id}, '${user.username}')"><i class="fas fa-trash-alt"></i></button>
-                    </td>
-                </tr>
-            `;
-        }
-    }
-    
-    tableBody.innerHTML = html;
-    
-    // 4. Renderizar los botones de paginación
-    let paginationHTML = '';
-    
-    // Botón "Anterior"
-    if (currentUserPage > 1) {
-        paginationHTML += `<button onclick="changeUserPage(${currentUserPage - 1})" class="btn pagination-button">&laquo; Anterior</button>`;
-    }
-    
-    // Botones numerados
-    for (let i = 1; i <= totalPages; i++) {
-        paginationHTML += `<button onclick="changeUserPage(${i})" class="btn pagination-button ${i === currentUserPage ? 'btn-primary' : ''}">${i}</button>`;
-    }
-    
-    // Botón "Siguiente"
-    if (currentUserPage < totalPages) {
-        paginationHTML += `<button onclick="changeUserPage(${currentUserPage + 1})" class="btn pagination-button">Siguiente &raquo;</button>`;
-    }
-    
-    paginationContainer.innerHTML = paginationHTML;
-}
-    
     // Actualizar tabla de logs
     function updateLogsTable(filterType = currentLogFilter) {
     const tableBody = document.getElementById('logsTableBody');
@@ -3641,10 +3609,11 @@ if (filterType === 'todos') {
         updateLogsTable();
     }
       
-    // Actualizar contadores estadísticos
+    // Actualizar contadores estadísticos (solo usuarios activos: los
+    // inactivos no deben contarse como cuentas operativas)
     function updateStatCounts() {
         let userCount = document.getElementById('userCount');
-        if(userCount) userCount.textContent = users.length;
+        if(userCount) userCount.textContent = users.filter(u => u.activo !== false).length;
     }
 
 function loadOptimizacionView() {
@@ -4368,36 +4337,58 @@ function createUser() {
     });
 }
 
-// Función para eliminar un usuario
-function confirmDeleteUser() {
+// Función para desactivar un usuario (el registro y su historial se conservan)
+function confirmDeactivateUser() {
     if(!currentUserId) return;
     
     // Guardar ID para referencia
     let userId = currentUserId;
     
-    // Hacer la petición DELETE
-    fetch(`/api/usuarios/${userId}`, {
-        method: 'DELETE'
+    // Desactivar: cambia el estado, nunca elimina el registro
+    fetch(`/api/usuarios/${userId}/desactivar`, {
+        method: 'PATCH'
     })
     .then(response => {
         if (!response.ok) {
-            throw new Error('Error al eliminar usuario');
+            return response.text().then(text => { throw new Error(text || `Error HTTP ${response.status}`); });
         }
         return response.text();
     })
     .then(data => {
         // Cerrar modal
-        closeDeleteUserModal();
+        closeDeactivateUserModal();
         
         // Recargar usuarios desde la BD
         loadUsersFromDatabase();
         
-        // Registrar actividad
-        registrarActividad("Eliminación de usuario con ID: " + userId);
+        showTemporaryMessage('✓ Usuario desactivado. Su cuenta e historial se conservan.');
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Error al eliminar usuario: ' + error.message);
+        showTemporaryMessage('Error al desactivar usuario: ' + error.message, 'error');
+    });
+}
+
+// Función para reactivar un usuario previamente desactivado
+function reactivateUser(userId, userName) {
+    if (!confirm(`¿Reactivar la cuenta de ${userName}? Volverá a poder iniciar sesión.`)) return;
+
+    fetch(`/api/usuarios/${userId}/reactivar`, {
+        method: 'PATCH'
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.text().then(text => { throw new Error(text || `Error HTTP ${response.status}`); });
+        }
+        return response.text();
+    })
+    .then(data => {
+        loadUsersFromDatabase();
+        showTemporaryMessage('✓ Usuario reactivado. Ya puede iniciar sesión.');
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showTemporaryMessage('Error al reactivar usuario: ' + error.message, 'error');
     });
 }
 
@@ -4662,21 +4653,23 @@ function closeAlert(alertId) {
     }
 }
 
-// Mostrar mensaje temporal
-function showTemporaryMessage(message) {
+// Mostrar mensaje temporal (type: 'success' | 'error')
+function showTemporaryMessage(message, type = 'success') {
     const container = document.getElementById('alertContainer');
     if (!container) return;
     
+    const esError = type === 'error';
+    const color = esError ? '#e74c3c' : '#27ae60';
     const alertId = `temp-${Date.now()}`;
     const alertDiv = document.createElement('div');
     alertDiv.className = 'traffic-alert';
     alertDiv.id = alertId;
-    alertDiv.style.borderLeftColor = '#27ae60';
-    alertDiv.style.backgroundColor = '#f0fff4';
+    alertDiv.style.borderLeftColor = color;
+    alertDiv.style.backgroundColor = esError ? '#fff5f5' : '#f0fff4';
     
     alertDiv.innerHTML = `
-        <div class="alert-icon" style="color: #27ae60;">
-            <i class="fas fa-check-circle"></i>
+        <div class="alert-icon" style="color: ${color};">
+            <i class="fas ${esError ? 'fa-exclamation-circle' : 'fa-check-circle'}"></i>
         </div>
         <div class="alert-content">
             <div class="alert-message">${message}</div>

@@ -3,6 +3,7 @@ package com.example.security.servicios;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,10 +38,14 @@ public class UserService {
 
     /**
      * Busca un usuario por su ID
+     *
+     * @throws NoSuchElementException si no existe el usuario (los controladores
+     *                                lo distinguen de otros errores para
+     *                                responder 404)
      */
     public Usuario findById(Long id) {
         return usuarioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + id));
+                .orElseThrow(() -> new NoSuchElementException("Usuario no encontrado con ID: " + id));
     }
 
     /**
@@ -170,11 +175,40 @@ public class UserService {
     }
 
     /**
-     * Elimina un usuario por su ID
+     * Desactiva un usuario sin eliminar su registro: se conservan credenciales,
+     * roles, relaciones (eventos, conversaciones) e historial.
+     *
+     * @param id identificador del usuario
+     * @return el usuario actualizado
+     * @throws NoSuchElementException    si el usuario no existe
+     * @throws IllegalStateException si ya está inactivo (transición inválida)
      */
     @Transactional
-    public void delete(Long id) {
+    public Usuario desactivarUsuario(Long id) {
         Usuario usuario = findById(id);
-        usuarioRepository.delete(usuario);
+        if (!usuario.isActivo()) {
+            throw new IllegalStateException("El usuario ya está inactivo (ID: " + id + ")");
+        }
+        usuario.setActivo(false);
+        return usuarioRepository.save(usuario);
+    }
+
+    /**
+     * Reactiva un usuario previamente desactivado, conservando su registro e
+     * historial.
+     *
+     * @param id identificador del usuario
+     * @return el usuario actualizado
+     * @throws NoSuchElementException    si el usuario no existe
+     * @throws IllegalStateException si ya está activo (transición inválida)
+     */
+    @Transactional
+    public Usuario reactivarUsuario(Long id) {
+        Usuario usuario = findById(id);
+        if (usuario.isActivo()) {
+            throw new IllegalStateException("El usuario ya está activo (ID: " + id + ")");
+        }
+        usuario.setActivo(true);
+        return usuarioRepository.save(usuario);
     }
 }

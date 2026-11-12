@@ -166,6 +166,22 @@ private PcapNetworkInterface findRealInterface(List<PcapNetworkInterface> interf
     @Autowired
     private MacAutorizadaService macAutorizadaService; 
 
+    /**
+     * Estado de autorización de una MAC vista por el escáner ARP. Se extrae en
+     * un método propio para poder verificarlo sin ejecutar la captura real.
+     * Una MAC inactiva nunca vuelve a autorizarse; queda NO_AUTORIZADO y no se
+     * confunde con un dispositivo desconocido.
+     */
+    EstadoAutorizacion determinarEstadoAutorizacion(String mac) {
+        if (macAutorizadaService.esMacAutorizada(mac)) {
+            return EstadoAutorizacion.AUTORIZADO;
+        }
+        if (macAutorizadaService.existeMac(mac)) {
+            return EstadoAutorizacion.NO_AUTORIZADO;
+        }
+        return EstadoAutorizacion.DESCONOCIDO;
+    }
+
     private void processArpPacket(Packet packet) {
     try {
         ArpPacket arpPacket = packet.get(ArpPacket.class);
@@ -191,10 +207,11 @@ private PcapNetworkInterface findRealInterface(List<PcapNetworkInterface> interf
             return;
         }
 
-        // Determinar estado según MAC
-        EstadoAutorizacion estado = macAutorizadaService.esMacAutorizada(senderMac)
-                ? EstadoAutorizacion.AUTORIZADO
-                : EstadoAutorizacion.DESCONOCIDO;
+        // Determinar estado según MAC:
+        //  - MAC activa en la lista       -> AUTORIZADO
+        //  - MAC registrada pero inactiva -> NO_AUTORIZADO (revocada)
+        //  - MAC no registrada            -> DESCONOCIDO
+        EstadoAutorizacion estado = determinarEstadoAutorizacion(senderMac);
 
         Dispositivo existente = dispositivoRepository.findByIp(senderIp);
 

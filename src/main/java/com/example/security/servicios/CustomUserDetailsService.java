@@ -3,6 +3,7 @@ package com.example.security.servicios;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -30,6 +31,15 @@ public class CustomUserDetailsService implements UserDetailsService {
                 System.out.println("Usuario no encontrado en la base de datos.");
                 return new UsernameNotFoundException("Usuario no encontrado: " + username);
             });
+
+    // Cuenta desactivada: se rechaza antes de evaluar credenciales ni conceder
+    // una autenticación válida. DisabledException es la excepción que Spring
+    // Security define para cuentas inhabilitadas; el mensaje no expone datos
+    // adicionales de la cuenta.
+    if (!usuario.isActivo()) {
+        System.out.println("Intento de acceso de usuario inactivo: " + username);
+        throw new DisabledException("Cuenta desactivada");
+    }
     
     // Imprimir información detallada para depuración
     System.out.println("Usuario encontrado: " + usuario);
