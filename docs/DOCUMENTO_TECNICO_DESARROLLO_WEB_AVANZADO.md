@@ -78,9 +78,9 @@ La arquitectura sigue el patrón de **tres capas** (Controller → Service → R
 | Componente      | Configuración                                              | Propósito                        |
 | --------------- | ---------------------------------------------------------- | -------------------------------- |
 | **Groq API**    | Base URL: `https://api.groq.com/openai`                    | Proveedor de LLM                 |
-| **Modelo IA**   | `llama-3.1-8b-instant`, `mixtral-8x7b-32768` o `qwen3-32b` | Generación de respuestas         |
+| **Modelo IA**   | `openai/gpt-oss-20b` (o `openai/gpt-oss-120b`)             | Generación de respuestas         |
 | **Temperature** | 0.7                                                        | Grado de creatividad (0.0-1.0)   |
-| **Max Tokens**  | 2048                                                       | Límite de respuesta por consulta |
+| **Max Tokens**  | 8192                                                       | Límite de respuesta por consulta |
 | **Timeout**     | 30 segundos                                                | Tiempo máximo de espera          |
 
 ### Herramientas de Red y Telefonía
@@ -97,7 +97,7 @@ La arquitectura sigue el patrón de **tres capas** (Controller → Service → R
 # LLM / Chat
 GROQ_API_KEY=gsk_xxxxxxxxxxxxx
 GROQ_API_BASE_URL=https://api.groq.com/openai
-GROQ_CHAT_MODEL=llama-3.1-8b-instant
+GROQ_CHAT_MODEL=openai/gpt-oss-20b
 
 # Base de Datos
 MYSQL_HOST=localhost
