@@ -107,10 +107,13 @@ MYSQL_USERNAME=root
 MYSQL_PASSWORD=
 
 # Asterisk (Telefonía)
-ASTERISK_HOST=172.29.126.164
+# En Docker: docker compose up -d --build
+ASTERISK_HOST=localhost
 ASTERISK_PORT=5038
 ASTERISK_USERNAME=admin
 ASTERISK_PASSWORD=Admin123
+ASTERISK_CDR_PATH=docker/asterisk/data/log/cdr-csv/Master.csv
+ASTERISK_EXTERNAL_ADDRESS=127.0.0.1
 
 # Servidor
 SERVER_PORT=8080

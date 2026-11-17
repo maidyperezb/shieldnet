@@ -2,11 +2,13 @@ package com.example.security.controller;
 
 import com.example.security.servicios.AsteriskAMIService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.regex.*;
 
@@ -17,6 +19,9 @@ public class AsteriskController {
 
     @Autowired
     private AsteriskAMIService amiService;
+
+    @Value("${asterisk.cdr.path}")
+    private String cdrPath;
 
     /**
      * GET /api/voip/status
@@ -86,29 +91,7 @@ public class AsteriskController {
                     // Nuevo peer, guardar el anterior si existe
                     if (!currentPeer.isEmpty() && currentPeer.containsKey("ObjectName")) {
                         System.out.println("Peer encontrado: " + currentPeer);
-                        
-                        Map<String, String> ext = new HashMap<>();
-                        String objectName = currentPeer.get("ObjectName");
-                        
-                        // Extraer el número de extensión del CallerID o usar ObjectName
-                        String extensionNumber = extractExtensionNumber(currentPeer.getOrDefault("CallerID", objectName));
-                        
-                        ext.put("extension", extensionNumber);
-                        ext.put("name", objectName);
-                        
-                        String ip = currentPeer.getOrDefault("IPaddress", "N/A");
-                        String port = currentPeer.getOrDefault("IPport", "");
-                        ext.put("host", port.isEmpty() ? ip : ip + ":" + port);
-                        
-                        // El status "Unmonitored" significa que está registrado
-                        String status = currentPeer.getOrDefault("Status", "UNREACHABLE");
-                        if (status.equals("Unmonitored") || status.contains("OK")) {
-                            ext.put("status", "OK");
-                        } else {
-                            ext.put("status", "UNREACHABLE");
-                        }
-                        
-                        extensions.add(ext);
+                        extensions.add(buildExtension(currentPeer));
                     }
                     currentPeer.clear();
                     
@@ -127,33 +110,15 @@ public class AsteriskController {
                     
                 } else if (line.startsWith("CallerID:")) {
                     currentPeer.put("CallerID", line.substring(9).trim());
-                    
+
+                } else if (line.startsWith("Description:")) {
+                    currentPeer.put("Description", line.substring(12).trim());
+
                 } else if (line.contains("PeerlistComplete") || line.contains("EventList: Complete")) {
                     // Guardar el último peer
                     if (!currentPeer.isEmpty() && currentPeer.containsKey("ObjectName")) {
                         System.out.println("Último peer encontrado: " + currentPeer);
-                        
-                        Map<String, String> ext = new HashMap<>();
-                        String objectName = currentPeer.get("ObjectName");
-                        
-                        // Extraer el número de extensión del CallerID o usar ObjectName
-                        String extensionNumber = extractExtensionNumber(currentPeer.getOrDefault("CallerID", objectName));
-                        
-                        ext.put("extension", extensionNumber);
-                        ext.put("name", objectName);
-                        
-                        String ip = currentPeer.getOrDefault("IPaddress", "N/A");
-                        String port = currentPeer.getOrDefault("IPport", "");
-                        ext.put("host", port.isEmpty() ? ip : ip + ":" + port);
-                        
-                        String status = currentPeer.getOrDefault("Status", "UNREACHABLE");
-                        if (status.equals("Unmonitored") || status.contains("OK")) {
-                            ext.put("status", "OK");
-                        } else {
-                            ext.put("status", "UNREACHABLE");
-                        }
-                        
-                        extensions.add(ext);
+                        extensions.add(buildExtension(currentPeer));
                     }
                     break;
                 }
@@ -196,6 +161,57 @@ public class AsteriskController {
         
         // Si no hay números, devolver el original
         return callerIdOrName;
+    }
+
+    /**
+     * Extrae el nombre visible del CallerID.
+     * Entrada: "\"Ventas\" <1001>" o "Ventas <1001>"
+     * Salida: "Ventas" o null si no hay nombre.
+     */
+    private String extractCallerIdName(String callerIdOrName) {
+        if (callerIdOrName == null || callerIdOrName.isEmpty()) {
+            return null;
+        }
+
+        int separator = callerIdOrName.indexOf('<');
+        if (separator <= 0) {
+            return null;
+        }
+
+        String name = callerIdOrName.substring(0, separator).replace("\"", "").trim();
+        return name.isEmpty() ? null : name;
+    }
+
+    /**
+     * Construye la representación de un peer SIP para la API.
+     * AMI no incluye CallerID en los eventos PeerEntry, por eso el nombre
+     * visible se toma de Description (configurado en sip.conf).
+     */
+    private Map<String, String> buildExtension(Map<String, String> peer) {
+        Map<String, String> ext = new HashMap<>();
+        String objectName = peer.get("ObjectName");
+        String callerId = peer.getOrDefault("CallerID", objectName);
+
+        String extensionNumber = extractExtensionNumber(callerId);
+        String extensionName = extractCallerIdName(callerId);
+
+        if (extensionName == null || extensionName.isBlank()) {
+            String description = peer.get("Description");
+            if (description != null && !description.isBlank()) {
+                extensionName = description;
+            }
+        }
+
+        ext.put("extension", extensionNumber);
+        ext.put("name", extensionName != null && !extensionName.isBlank() ? extensionName : objectName);
+
+        String ip = peer.getOrDefault("IPaddress", "N/A");
+        String port = peer.getOrDefault("IPport", "");
+        ext.put("host", port.isEmpty() ? ip : ip + ":" + port);
+
+        String status = peer.getOrDefault("Status", "UNREACHABLE");
+        ext.put("status", status.equals("Unmonitored") || status.contains("OK") ? "OK" : "UNREACHABLE");
+        return ext;
     }
 
     /**
@@ -273,19 +289,29 @@ public class AsteriskController {
             // Primero obtener el mapa de extensiones
             Map<String, String> extensionNames = getExtensionNamesMap();
             
-            // Leer CDR con wsl
-            ProcessBuilder pb = new ProcessBuilder(
-                "wsl", "tail", "-n", "20", "/var/log/asterisk/cdr-csv/Master.csv"
-            );
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            
+            // Leer el CDR compartido por el contenedor de Asterisk.
+            Path cdrFile = Path.of(cdrPath);
             List<Map<String, Object>> history = new ArrayList<>();
-            String line;
-            
-            while ((line = reader.readLine()) != null) {
-                String[] fields = line.replace("\"", "").split(",");
+
+            if (!Files.isRegularFile(cdrFile)) {
+                System.err.println("Archivo CDR no encontrado: " + cdrFile.toAbsolutePath());
+                return ResponseEntity.ok(history);
+            }
+
+            // Mantener solo las últimas 20 líneas sin cargar todo el archivo.
+            Deque<String> lastLines = new ArrayDeque<>();
+            try (BufferedReader fileReader = Files.newBufferedReader(cdrFile)) {
+                String line;
+                while ((line = fileReader.readLine()) != null) {
+                    lastLines.addLast(line);
+                    if (lastLines.size() > 20) {
+                        lastLines.removeFirst();
+                    }
+                }
+            }
+
+            for (String line : lastLines) {
+                String[] fields = line.replace("\"", "").split(",", -1);
                 if (fields.length >= 14) {
                     Map<String, Object> call = new HashMap<>();
                     
@@ -328,8 +354,6 @@ public class AsteriskController {
                     history.add(call);
                 }
             }
-            reader.close();
-            process.waitFor();
             
             return ResponseEntity.ok(history);
         } catch (Exception e) {
@@ -353,8 +377,19 @@ public class AsteriskController {
                 line = line.trim();
                 if (line.startsWith("ObjectName:")) {
                     currentExtension = line.substring(11).trim();
-                    // Por ahora, nombre = extensión (puedes extenderlo después)
                     map.put(currentExtension, currentExtension);
+                } else if (line.startsWith("CallerID:")) {
+                    String callerId = line.substring(9).trim();
+                    String name = extractCallerIdName(callerId);
+                    if (currentExtension != null && name != null) {
+                        map.put(currentExtension, name);
+                    }
+                } else if (line.startsWith("Description:")) {
+                    String description = line.substring(12).trim();
+                    if (currentExtension != null && !description.isEmpty()
+                            && map.getOrDefault(currentExtension, currentExtension).equals(currentExtension)) {
+                        map.put(currentExtension, description);
+                    }
                 }
             }
         } catch (Exception e) {

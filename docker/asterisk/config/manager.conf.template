@@ -1,0 +1,19 @@
+; ====================================================================
+; Asterisk Manager Interface (AMI)
+; El backend Spring Boot se conecta aquí.
+; ====================================================================
+
+[general]
+enabled=yes
+port=${ASTERISK_AMI_PORT}
+bindaddr=0.0.0.0
+displayconnects=yes
+timestampevents=yes
+
+; En desarrollo el puerto AMI solo se publica en 127.0.0.1 desde Docker.
+; No publiques este puerto en Internet.
+[${ASTERISK_AMI_USER}]
+secret=${ASTERISK_AMI_PASSWORD}
+read=all
+write=all
+permit=0.0.0.0/0.0.0.0

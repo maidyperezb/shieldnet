@@ -85,15 +85,16 @@ public class AsteriskAMIService {
     private String readSimpleResponse() throws IOException {
         StringBuilder response = new StringBuilder();
         String line;
-        
+
         while ((line = reader.readLine()) != null) {
             response.append(line).append("\n");
             if (line.trim().isEmpty()) {
-                break; // Línea vacía indica fin de respuesta
+                return response.toString(); // Línea vacía: fin de respuesta
             }
         }
-        
-        return response.toString();
+
+        // EOF sin línea vacía: Asterisk cerró la conexión.
+        throw new IOException("El AMI cerró la conexión");
     }
 
     /**
@@ -103,11 +104,10 @@ public class AsteriskAMIService {
     private String readCompleteEventList() throws IOException {
         StringBuilder response = new StringBuilder();
         String line;
-        boolean inEvent = false;
-        
+
         while ((line = reader.readLine()) != null) {
             response.append(line).append("\n");
-            
+
             // Detectar fin de lista de eventos
             if (line.contains("EventList: Complete") || 
                 line.contains("PeerlistComplete") ||
@@ -117,10 +117,10 @@ public class AsteriskAMIService {
                 while ((line = reader.readLine()) != null) {
                     response.append(line).append("\n");
                     if (line.trim().isEmpty()) {
-                        return response.toString();
+                        break;
                     }
                 }
-                break;
+                return response.toString();
             }
             
             // Si encontramos un error o respuesta fallida, terminar
@@ -134,8 +134,9 @@ public class AsteriskAMIService {
                 return response.toString();
             }
         }
-        
-        return response.toString();
+
+        // EOF sin evento de finalización: la conexión se cayó a mitad de la lista.
+        throw new IOException("El AMI cerró la conexión antes de completar la respuesta");
     }
 
     /**
@@ -148,28 +149,20 @@ public class AsteriskAMIService {
                     return "Error: No conectado al AMI";
                 }
             }
-            
-            System.out.println(">>> Enviando acción: " + action);
-            
-            writer.println("Action: " + action);
-            if (parameters != null) {
-                for (Map.Entry<String, String> entry : parameters.entrySet()) {
-                    writer.println(entry.getKey() + ": " + entry.getValue());
+
+            try {
+                return executeCommand(action, parameters);
+            } catch (IOException e) {
+                // Asterisk pudo reiniciarse y el socket viejo queda en
+                // CLOSE_WAIT. Reconectar y reintentar una sola vez.
+                System.err.println("Conexión AMI perdida (" + e.getMessage() + "), reconectando...");
+                disconnect();
+                if (!connect()) {
+                    return "Error: No conectado al AMI";
                 }
+                return executeCommand(action, parameters);
             }
-            writer.println("");
-            writer.flush();
-            
-            // Si es un comando que devuelve lista de eventos, usar readCompleteEventList
-            if (action.equals("SIPpeers") || action.equals("CoreShowChannels")) {
-                String response = readCompleteEventList();
-                System.out.println("<<< Respuesta completa recibida (" + response.length() + " caracteres)");
-                return response;
-            } else {
-                String response = readSimpleResponse();
-                return response;
-            }
-            
+
         } catch (Exception e) {
             System.err.println("Error al enviar comando AMI: " + e.getMessage());
             e.printStackTrace();
@@ -177,6 +170,28 @@ public class AsteriskAMIService {
             disconnect();
             return "Error: " + e.getMessage();
         }
+    }
+
+    private String executeCommand(String action, Map<String, String> parameters) throws IOException {
+        System.out.println(">>> Enviando acción: " + action);
+
+        writer.println("Action: " + action);
+        if (parameters != null) {
+            for (Map.Entry<String, String> entry : parameters.entrySet()) {
+                writer.println(entry.getKey() + ": " + entry.getValue());
+            }
+        }
+        writer.println("");
+        writer.flush();
+
+        // Si es un comando que devuelve lista de eventos, usar readCompleteEventList
+        if (action.equals("SIPpeers") || action.equals("CoreShowChannels")) {
+            String response = readCompleteEventList();
+            System.out.println("<<< Respuesta completa recibida (" + response.length() + " caracteres)");
+            return response;
+        }
+
+        return readSimpleResponse();
     }
 
     /**

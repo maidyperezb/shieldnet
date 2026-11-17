@@ -32,4 +32,7 @@ build/
 ### VS Code ###
 .vscode/
 
+### Asterisk en Docker ###
+docker/asterisk/data/
+
 .env

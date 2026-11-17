@@ -1,0 +1,75 @@
+; ====================================================================
+; Asterisk - canal SIP legado (chan_sip)
+; El backend usa la acción AMI "SIPpeers", disponible en chan_sip.
+; ====================================================================
+
+[general]
+context=internal
+allowoverlap=no
+udpbindaddr=0.0.0.0:${ASTERISK_SIP_PORT}
+tcpenable=yes
+tcpbindaddr=0.0.0.0:${ASTERISK_SIP_PORT}
+transport=udp,tcp
+
+srvlookup=no
+pedantic=no
+language=es
+
+; Necesario cuando Asterisk corre en Docker y los softphones están fuera
+; del contenedor (en el mismo PC o en la LAN).
+nat=force_rport,comedia
+directmedia=no
+qualify=yes
+qualifyfreq=30
+
+disallow=all
+allow=ulaw
+allow=alaw
+allow=g722
+
+externaddr=${ASTERISK_EXTERNAL_ADDRESS}
+externrefresh=10
+
+rtptimeout=60
+rtpholdtimeout=300
+rtpkeepalive=30
+
+; --------------------------------------------------------------------
+; Extensión 1001 - Ventas
+; --------------------------------------------------------------------
+[1001]
+type=friend
+host=dynamic
+context=internal
+secret=${ASTERISK_EXT_1001_SECRET}
+callerid="Ventas" <1001>
+description=Ventas
+dtmfmode=rfc2833
+nat=force_rport,comedia
+directmedia=no
+qualify=yes
+qualifyfreq=30
+disallow=all
+allow=ulaw
+allow=alaw
+allow=g722
+
+; --------------------------------------------------------------------
+; Extensión 1002 - Almacén
+; --------------------------------------------------------------------
+[1002]
+type=friend
+host=dynamic
+context=internal
+secret=${ASTERISK_EXT_1002_SECRET}
+callerid="Almacén" <1002>
+description=Almacén
+dtmfmode=rfc2833
+nat=force_rport,comedia
+directmedia=no
+qualify=yes
+qualifyfreq=30
+disallow=all
+allow=ulaw
+allow=alaw
+allow=g722

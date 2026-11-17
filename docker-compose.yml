@@ -1,0 +1,58 @@
+services:
+  asterisk:
+    build:
+      context: ./docker/asterisk
+    container_name: shieldnet-asterisk
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/Bogota}
+      ASTERISK_AMI_USER: ${ASTERISK_USERNAME:-admin}
+      ASTERISK_AMI_PASSWORD: ${ASTERISK_PASSWORD:-Admin123}
+      ASTERISK_AMI_PORT: "5038"
+      ASTERISK_SIP_PORT: "5060"
+      # IP del equipo que ejecuta Docker. Necesaria para que el SDP/RTP
+      # apunte a una dirección alcanzable por los softphones.
+      ASTERISK_EXTERNAL_ADDRESS: ${ASTERISK_EXTERNAL_ADDRESS:-127.0.0.1}
+      ASTERISK_EXT_1001_SECRET: ${ASTERISK_EXT_1001_SECRET:-Ventas2026}
+      ASTERISK_EXT_1002_SECRET: ${ASTERISK_EXT_1002_SECRET:-Almacen2026}
+    ports:
+      # AMI solo accesible desde el propio equipo.
+      - "127.0.0.1:5038:5038/tcp"
+      # SIP y RTP deben ser accesibles desde los softphones de la LAN.
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "10000-10100:10000-10100/udp"
+    volumes:
+      - ./docker/asterisk/config:/etc/asterisk-templates:ro
+      - ./docker/asterisk/data/log:/var/log/asterisk
+    healthcheck:
+      test: ["CMD-SHELL", "asterisk -rx 'core show version' >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Softphone de demostración (baresip): registra 1001 y 1002 contra
+  # Asterisk para que el panel de VoIP las muestre en línea. No tiene audio
+  # real; detén este servicio antes de usar un softphone real con la misma
+  # extensión.
+  softphone:
+    build:
+      context: ./docker/softphone
+    container_name: shieldnet-softphone
+    restart: unless-stopped
+    depends_on:
+      asterisk:
+        condition: service_healthy
+    environment:
+      SOFTPHONE_SIP_DOMAIN: asterisk
+      SOFTPHONE_EXT_1001: "1001"
+      SOFTPHONE_EXT_1002: "1002"
+      SOFTPHONE_EXT_1001_SECRET: ${ASTERISK_EXT_1001_SECRET:-Ventas2026}
+      SOFTPHONE_EXT_1002_SECRET: ${ASTERISK_EXT_1002_SECRET:-Almacen2026}
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep baresip >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
